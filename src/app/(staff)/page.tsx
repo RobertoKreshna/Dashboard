@@ -128,7 +128,7 @@ export default async function DashboardPage({
           <h2 className="flex items-center gap-2 font-semibold"><MapPin className="size-4 text-brand-ink" /> Listings map</h2>
           <span className="text-xs text-muted-foreground">Active listings (available + reserved)</span>
         </div>
-        <div className="h-[460px] sm:h-[560px]">
+        <div className="lg:h-[560px]">
           <ListingMap counts={mapCounts} points={mapPoints} listingBase="/listings" />
         </div>
         {where && (

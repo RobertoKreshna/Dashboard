@@ -3,13 +3,14 @@
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Feature, FeatureCollection } from "geojson";
-import { Check, ChevronDown, ChevronRight, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import { buildRegencyIndex, cityKey, placeKey, provinceKey } from "@/lib/geo";
 import { formatIDR } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { MapPoint } from "@/lib/listing-queries";
 import { useMapHover } from "@/components/listings/map-hover";
 import { useGeo } from "@/lib/use-geo";
+import { useIsPhone, useIsTouch } from "@/lib/use-media";
 
 type Count = { name: string; value: number; province?: string };
 export type MapCounts = {
@@ -105,6 +106,8 @@ export default function ListingMap({
   /** Where a clicked dot goes: `${listingBase}/<id>` ("/listings" for staff). */
   listingBase?: string;
 }) {
+  const touch = useIsTouch();
+  const phone = useIsPhone();
   const counts = useStable(countsProp);
   const points = useStable(pointsProp);
   const router = useRouter();
@@ -325,7 +328,18 @@ export default function ListingMap({
               width: withData.map((f) => (fp(f).uid === selectedUid ? 2.5 : 0.8)),
             },
           },
-          colorbar: { title: { text: "Listings" }, thickness: 10, len: 0.5, x: 0.99, xanchor: "right", tickformat: "d", dtick: max <= 6 ? 1 : undefined, outlinewidth: 0 },
+          colorbar: {
+            // On phones a vertical legend with a title covers a big part of the map: use a slim, untitled one.
+            ...(phone ? {} : { title: { text: "Listings" } }),
+            thickness: phone ? 8 : 10,
+            len: phone ? 0.35 : 0.5,
+            x: 0.99,
+            xanchor: "right",
+            tickfont: { size: phone ? 10 : 12 },
+            tickformat: "d",
+            dtick: max <= 6 ? 1 : undefined,
+            outlinewidth: 0,
+          },
           hovertemplate: "<b>%{text}</b><br>%{z} listing(s)<extra></extra>",
         });
       }
@@ -365,11 +379,12 @@ export default function ListingMap({
           margin: { l: 0, r: 0, t: 0, b: 0 },
           paper_bgcolor: "rgba(0,0,0,0)",
           geo: { ...geo, domain: { x: [0, 1], y: [0, 1] }, visible: false, bgcolor: "rgba(0,0,0,0)", projection: { type: "mercator" }, showframe: false },
-          dragmode: "pan",
+          // Touch: a pannable map swallows the finger, so the page can't be scrolled past it. Tapping still drills down.
+          dragmode: touch ? false : "pan",
           font: { family: "Inter, system-ui, sans-serif", color: "#1f2937" },
           hoverlabel: { font: { family: "Inter, system-ui, sans-serif" } },
         },
-        { responsive: true, scrollZoom: true, displaylogo: false, displayModeBar: "hover", modeBarButtonsToRemove: ["select2d", "lasso2d", "toImage"] },
+        { responsive: true, scrollZoom: !touch, displaylogo: false, displayModeBar: touch ? false : "hover", modeBarButtonsToRemove: ["select2d", "lasso2d", "toImage"] },
       );
 
       drawn.current = {
@@ -405,7 +420,7 @@ export default function ListingMap({
     return () => {
       dead = true;
     };
-  }, [view, points, router, go, province, city, district, village, listingBase]);
+  }, [view, points, router, go, province, city, district, village, listingBase, touch, phone]);
 
   // Highlight on the map whatever is hovered in the list.
   React.useEffect(() => {
@@ -459,6 +474,15 @@ export default function ListingMap({
     district: "Click a sub-district (kelurahan / desa).",
   }[level];
 
+  // Small regions are hard to hit with a finger, so touch devices also get a tap list of the regions that have listings.
+  const drill = (entry: Entry) => {
+    if (level === "country") go({ province: entry.name, city: null, district: null, village: null });
+    else if (level === "province") go({ province: entry.province ?? province, city: entry.name, district: null, village: null });
+    else if (level === "city") go({ district: entry.name, village: null });
+    else go({ village: entry.name === village ? null : entry.name });
+  };
+  const chips = touch && view ? [...view.entries.values()].filter((e) => e.count > 0).sort((a, b) => b.count - a.count) : [];
+
   const crumb = (label: string, patch: Record<string, string | null>, current: boolean) =>
     current ? (
       <span className="px-1.5 py-0.5 font-semibold">{label}</span>
@@ -469,7 +493,7 @@ export default function ListingMap({
     );
 
   return (
-    <div className="flex h-full flex-col gap-3">
+    <div className="flex h-full min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="w-full sm:w-64">
           <ProvincePicker
@@ -506,7 +530,7 @@ export default function ListingMap({
         )}
       </div>
 
-      <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-xl border bg-[#f5f7fa]">
+      <div className="relative min-h-[360px] flex-1 lg:min-h-[320px] overflow-hidden rounded-xl border bg-[#f5f7fa]">
         {loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
         <div ref={el} className="absolute inset-0" role="img" aria-label="Map of listing counts by region" />
         {points.length > 0 && (
@@ -517,8 +541,27 @@ export default function ListingMap({
         )}
       </div>
 
+      {chips.length > 0 && (
+        <div className="-mx-1 flex max-w-full gap-2 overflow-x-auto px-1 pb-1" aria-label="Regions with listings">
+          {chips.map((e) => (
+            <button
+              key={e.name}
+              type="button"
+              onClick={() => drill(e)}
+              className={cn(
+                "flex h-10 shrink-0 items-center gap-2 rounded-full border bg-white px-3.5 text-sm",
+                e.name === village && "border-primary bg-brand-light/50 font-semibold",
+              )}
+            >
+              {e.name}
+              <span className="rounded-full bg-brand-light/70 px-2 py-0.5 text-xs font-semibold tabular-nums">{e.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="space-y-1 text-xs text-muted-foreground">
-        <p>{hint} Drag to pan, scroll to zoom.</p>
+        <p>{touch ? hint.replace("Click", "Tap") : `${hint} Drag to pan, scroll to zoom.`}</p>
         {view?.note && <p>{view.note}</p>}
         {view && view.unmatched.length > 0 && (
           <p>Not shown on the map (no matching boundary): {view.unmatched.map((u) => `${u.name} (${u.value})`).join(", ")}. They are still in the list.</p>
@@ -542,18 +585,23 @@ function ProvincePicker({
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState("");
   const root = React.useRef<HTMLDivElement>(null);
+  const phone = useIsPhone();
 
   React.useEffect(() => {
     if (!open) return;
-    const down = (e: MouseEvent) => !root.current?.contains(e.target as Node) && setOpen(false);
+    const down = (e: PointerEvent) => !root.current?.contains(e.target as Node) && setOpen(false);
     const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", down);
+    document.addEventListener("pointerdown", down);
     document.addEventListener("keydown", key);
+    // On phones the list is a bottom sheet: keep the page still behind it.
+    const prev = document.body.style.overflow;
+    if (phone) document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener("mousedown", down);
+      document.removeEventListener("pointerdown", down);
       document.removeEventListener("keydown", key);
+      document.body.style.overflow = prev;
     };
-  }, [open]);
+  }, [open, phone]);
 
   const pick = (v: string) => {
     onChange(v);
@@ -572,7 +620,7 @@ function ProvincePicker({
         type="button"
         onClick={() => pick(v)}
         className={cn(
-          "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-brand-light/50",
+          "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-3 text-left text-base hover:bg-brand-light/50 sm:py-2 sm:text-sm",
           (value === label || (!value && !v)) && "bg-brand-light/40 font-semibold",
         )}
       >
@@ -601,20 +649,36 @@ function ProvincePicker({
         <span className="truncate">{value || "All Indonesia"}</span>
         <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition", open && "rotate-180")} />
       </button>
+      {open && phone && <div className="fixed inset-0 z-[69] bg-black/40" onClick={() => setOpen(false)} aria-hidden />}
       {open && (
-        <div className="absolute z-30 mt-1 w-full min-w-64 overflow-hidden rounded-xl border bg-popover shadow-lg">
+        <div
+          className={cn(
+            "overflow-hidden border bg-popover shadow-lg",
+            phone
+              ? "fixed inset-x-0 bottom-0 z-[70] flex max-h-[75dvh] flex-col rounded-t-2xl pb-[env(safe-area-inset-bottom)]"
+              : "absolute z-30 mt-1 w-full min-w-64 rounded-xl",
+          )}
+        >
+          {phone && (
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <span className="text-sm font-semibold">Province</span>
+              <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="-mr-1.5 rounded-lg p-1.5 hover:bg-muted">
+                <X className="size-5" />
+              </button>
+            </div>
+          )}
           <div className="relative border-b p-2">
             <Search className="pointer-events-none absolute left-4 top-4.5 size-4 text-muted-foreground" />
             <input
-              autoFocus
+              autoFocus={!phone}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search province…"
               aria-label="Search province"
-              className="h-9 w-full rounded-md border border-input bg-white pl-8 pr-2 text-sm outline-none focus-visible:border-ring"
+              className="h-10 w-full rounded-md border border-input bg-white pl-8 pr-2 text-base outline-none focus-visible:border-ring sm:h-9 sm:text-sm"
             />
           </div>
-          <ul role="listbox" className="max-h-72 overflow-auto p-1">
+          <ul role="listbox" className={cn("overflow-auto overscroll-contain p-1", phone ? "min-h-0 flex-1" : "max-h-72")}>
             {showAll && row("All Indonesia", null, "")}
             {withListings.length > 0 && (
               <li role="presentation" className="px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">

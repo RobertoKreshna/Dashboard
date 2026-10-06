@@ -40,7 +40,58 @@ export default async function DealsPage({
       />
       <div className="space-y-4">
         <DealFilterBar salesCodes={codes.map((c) => ({ code: c.code, name: c.name ?? "" }))} cities={cities} banks={banks} />
-        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
+        {/* Phones and tablets: cards. Wide screens: the full table. */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:hidden">
+          {rows.length === 0 && (
+            <p className="rounded-xl border bg-card py-12 text-center text-sm text-muted-foreground sm:col-span-2">No deals match these filters.</p>
+          )}
+          {rows.map((d) => (
+            <div key={d.id} className="space-y-2 rounded-xl border bg-card p-3.5 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-semibold tabular-nums">{d.id}</span>
+                    <TypeBadge type={d.dealType} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(d.dealDate)} · {dealSourceLabel(d.source)}
+                    {d.listingId && (
+                      <>
+                        {" · "}
+                        <Link href={`/listings/${d.listingId}`} className="font-medium text-brand-ink hover:underline">{d.listingId}</Link>
+                      </>
+                    )}
+                  </p>
+                </div>
+                <DealRowActions id={d.id} linkedListing={d.listingId} />
+              </div>
+              <div>
+                <p className="font-medium">{propertyTypeLabel(d.propertyType)} · {d.city}</p>
+                <p className="truncate text-xs text-muted-foreground">{d.address}</p>
+              </div>
+              <p className="text-sm">
+                {d.buyerName}
+                {d.buyerPhone && <span className="text-muted-foreground"> · {d.buyerPhone}</span>}
+              </p>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 border-t pt-2 text-sm">
+                <dt className="text-muted-foreground">Final price</dt>
+                <dd className="text-right font-semibold tabular-nums">{formatIDR(d.finalPrice)}</dd>
+                <dt className="text-muted-foreground">Commission</dt>
+                <dd className="text-right tabular-nums">{d.commissionAmount !== null ? formatIDR(d.commissionAmount) : "-"}</dd>
+                <dt className="text-muted-foreground">Payment</dt>
+                <dd className="text-right">{paymentLabel(d.paymentType, d.bankName)}</dd>
+                <dt className="text-muted-foreground">Sales</dt>
+                <dd className="text-right">{d.salesCode}</dd>
+              </dl>
+            </div>
+          ))}
+          <div className="rounded-xl border bg-brand-light/40 p-3.5 text-sm font-semibold sm:col-span-2">
+            <p>Totals · {totals.count.toLocaleString("id-ID")} deal{totals.count === 1 ? "" : "s"} (all pages)</p>
+            <p className="mt-1 flex justify-between font-normal"><span>Final price</span><span className="font-semibold tabular-nums">{formatIDR(totals.value)}</span></p>
+            <p className="flex justify-between font-normal"><span>Commission</span><span className="font-semibold tabular-nums">{formatIDR(totals.commission)}</span></p>
+          </div>
+        </div>
+        <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-sm lg:block">
           <Table>
             <TableHeader>
               <TableRow>

@@ -45,7 +45,41 @@ export default async function ListingsPage({
       />
       <div className="space-y-4">
         <ListingFilterBar compact priceBounds={priceBounds} locations={locations} salesCodes={codes} />
-        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
+        {/* Phones and tablets: cards. Wide screens: the full table. */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:hidden">
+          {rows.length === 0 && (
+            <p className="rounded-xl border bg-card py-12 text-center text-sm text-muted-foreground sm:col-span-2">No listings match these filters.</p>
+          )}
+          {rows.map((r) => (
+            <div key={r.id} className="flex gap-3 rounded-xl border bg-card p-3 shadow-sm">
+              <ListingThumb path={r.coverPath} alt={r.title} className="size-20 shrink-0 rounded-lg" />
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <TypeBadge type={r.listingType} />
+                  <StatusBadge status={r.status} />
+                </div>
+                <Link href={`/listings/${r.id}`} className="block font-medium leading-snug hover:underline">{r.title}</Link>
+                <div className="font-semibold tabular-nums text-brand-ink">
+                  <PriceText price={r.price} listingType={r.listingType} rentalPeriod={r.rentalPeriod} />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {r.id} · {[r.district, r.city].filter(Boolean).join(", ")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {r.bedrooms} bed · {r.bathrooms} bath · {r.salesCode}
+                </p>
+              </div>
+              <Link
+                href={`/listings/${r.id}/edit`}
+                aria-label={`Edit ${r.id}`}
+                className={buttonVariants({ variant: "ghost", size: "icon" }) + " shrink-0 self-start"}
+              >
+                <Pencil />
+              </Link>
+            </div>
+          ))}
+        </div>
+        <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-sm lg:block">
           <Table>
             <TableHeader>
               <TableRow>

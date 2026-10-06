@@ -68,6 +68,58 @@ export function SalesCodeManager({
     return () => clearTimeout(t);
   }, [q, initialQuery, router]);
 
+  const rowActions = (r: (typeof rows)[number]) => (
+    <div className="flex justify-end gap-1">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`Edit ${r.code}`}
+        onClick={() => setEditing(r)}
+      >
+        <Pencil />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={
+          r.isActive
+            ? `Set ${r.code} inactive`
+            : `Set ${r.code} active`
+        }
+        title={r.isActive ? "Set inactive" : "Set active"}
+        onClick={() =>
+          startToggle(async () => {
+            await setSalesCodeActive(r.code, !r.isActive);
+            toast.success(
+              `${r.code} is now ${r.isActive ? "inactive" : "active"}`,
+            );
+          })
+        }
+      >
+        <Power />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`Delete ${r.code}`}
+        onClick={() => setDeleting(r)}
+      >
+        <Trash2 className="text-destructive" />
+      </Button>
+    </div>
+  );
+
+  const statusBadge = (active: boolean) => (
+    <span
+      className={
+        "inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold " +
+        (active ? "bg-emerald-100 text-emerald-900" : "bg-slate-200 text-slate-700")
+      }
+    >
+      {active ? "Active" : "Inactive"}
+    </span>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -86,7 +138,34 @@ export function SalesCodeManager({
         </Button>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
+      {/* Phones and tablets: cards. Wide screens: the full table. */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:hidden">
+        {rows.length === 0 && (
+          <p className="rounded-xl border bg-card py-10 text-center text-sm text-muted-foreground sm:col-span-2">No sales codes found.</p>
+        )}
+        {rows.map((r) => (
+          <div key={r.code} className="space-y-2 rounded-xl border bg-card p-3.5 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">{r.code}</span>
+                  {statusBadge(r.isActive)}
+                </div>
+                <p className="truncate">{r.fullName}</p>
+              </div>
+              {rowActions(r)}
+            </div>
+            <p className="break-words text-sm text-muted-foreground">
+              {r.phone || "-"} · {r.email || "-"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {r.listingCount} listing{r.listingCount === 1 ? "" : "s"} · {r.dealCount} deal{r.dealCount === 1 ? "" : "s"} · updated {formatDate(r.updatedAt)}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-sm lg:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -125,57 +204,11 @@ export function SalesCodeManager({
                   {r.dealCount}
                 </TableCell>
                 <TableCell>
-                  <span
-                    className={
-                      "inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold " +
-                      (r.isActive
-                        ? "bg-emerald-100 text-emerald-900"
-                        : "bg-slate-200 text-slate-700")
-                    }
-                  >
-                    {r.isActive ? "Active" : "Inactive"}
-                  </span>
+                  {statusBadge(r.isActive)}
                 </TableCell>
                 <TableCell>{formatDate(r.updatedAt)}</TableCell>
                 <TableCell>
-                  <div className="flex justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Edit ${r.code}`}
-                      onClick={() => setEditing(r)}
-                    >
-                      <Pencil />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={
-                        r.isActive
-                          ? `Set ${r.code} inactive`
-                          : `Set ${r.code} active`
-                      }
-                      title={r.isActive ? "Set inactive" : "Set active"}
-                      onClick={() =>
-                        startToggle(async () => {
-                          await setSalesCodeActive(r.code, !r.isActive);
-                          toast.success(
-                            `${r.code} is now ${r.isActive ? "inactive" : "active"}`,
-                          );
-                        })
-                      }
-                    >
-                      <Power />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Delete ${r.code}`}
-                      onClick={() => setDeleting(r)}
-                    >
-                      <Trash2 className="text-destructive" />
-                    </Button>
-                  </div>
+                  {rowActions(r)}
                 </TableCell>
               </TableRow>
             ))}

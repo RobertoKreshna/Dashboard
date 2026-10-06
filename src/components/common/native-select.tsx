@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Check, ChevronDown, Search } from "lucide-react";
+import { Check, ChevronDown, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useIsPhone } from "@/lib/use-media";
 
 /**
  * Styled dropdown that is a drop-in replacement for <select>: pass <option> children,
@@ -78,6 +79,7 @@ export function NativeSelect({
   const menu = React.useRef<HTMLDivElement>(null);
   const showSearch = searchable ?? options.length > 8;
   const listId = React.useId();
+  const phone = useIsPhone();
 
   const visible = q.trim() ? options.filter((o) => o.label.toLowerCase().includes(q.trim().toLowerCase())) : options;
 
@@ -87,7 +89,9 @@ export function NativeSelect({
     if (r) {
       // Fixed positioning so the menu is never clipped by scrolling/overflow-hidden parents (popovers, sheets).
       const flip = window.innerHeight - r.bottom < 300 && r.top > window.innerHeight - r.bottom;
-      setPos({ left: r.left, width: r.width, ...(flip ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }) });
+      const w = Math.max(r.width, 192);
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+      setPos({ left, width: r.width, ...(flip ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }) });
     }
     setQ("");
     setActive(Math.max(0, options.findIndex((o) => o.value === current)));
@@ -106,17 +110,28 @@ export function NativeSelect({
 
   React.useEffect(() => {
     if (!open) return;
-    const down = (e: MouseEvent) => !root.current?.contains(e.target as Node) && setOpen(false);
+    const down = (e: PointerEvent) => !root.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("pointerdown", down);
+    if (phone) {
+      // Bottom sheet: keep the page still behind it. Opening the keyboard resizes/scrolls the page, which must not close it.
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.removeEventListener("pointerdown", down);
+        document.body.style.overflow = prev;
+      };
+    }
     // The menu is fixed, so close it if the page or a parent scrolls underneath it.
     const scroll = (e: Event) => !menu.current?.contains(e.target as Node) && setOpen(false);
-    document.addEventListener("mousedown", down);
+    const shut = () => setOpen(false);
     window.addEventListener("scroll", scroll, true);
-    window.addEventListener("resize", () => setOpen(false));
+    window.addEventListener("resize", shut);
     return () => {
-      document.removeEventListener("mousedown", down);
+      document.removeEventListener("pointerdown", down);
       window.removeEventListener("scroll", scroll, true);
+      window.removeEventListener("resize", shut);
     };
-  }, [open]);
+  }, [open, phone]);
 
   React.useEffect(() => {
     if (open) listRef.current?.querySelector<HTMLElement>(`[data-i="${active}"]`)?.scrollIntoView({ block: "nearest" });
@@ -173,56 +188,78 @@ export function NativeSelect({
         <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition", open && "rotate-180")} />
       </button>
 
-      {open && pos && (
-        <div
-          ref={menu}
-          style={{ left: pos.left, top: pos.top, bottom: pos.bottom, minWidth: Math.max(pos.width, 192) }}
-          className="fixed z-[70] overflow-hidden rounded-xl border bg-popover shadow-lg"
-        >
-          {showSearch && (
-            <div className="relative border-b p-2">
-              <Search className="pointer-events-none absolute left-4 top-4.5 size-4 text-muted-foreground" />
-              <input
-                autoFocus
-                value={q}
-                onChange={(e) => {
-                  setQ(e.target.value);
-                  setActive(0);
-                }}
-                placeholder="Search…"
-                aria-label="Search options"
-                className="h-9 w-full rounded-md border border-input bg-white pl-8 pr-2 text-sm outline-none focus-visible:border-ring"
-              />
-            </div>
-          )}
-          <ul ref={listRef} id={listId} role="listbox" aria-label={ariaLabel} className="max-h-64 overflow-auto p-1">
-            {visible.length === 0 && <li className="px-3 py-3 text-center text-sm text-muted-foreground">No results</li>}
-            {visible.map((o, i) => {
-              const on = o.value === current;
-              return (
-                <li
-                  key={o.value + i}
-                  data-i={i}
-                  role="option"
-                  aria-selected={on}
-                  aria-disabled={o.disabled}
-                  onMouseEnter={() => setActive(i)}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => choose(o)}
-                  className={cn(
-                    "flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm",
-                    i === active && "bg-brand-light/50",
-                    on && "font-semibold",
-                    o.disabled && "cursor-not-allowed opacity-50",
-                  )}
-                >
-                  <Check className={cn("size-4 shrink-0", on ? "opacity-100" : "opacity-0")} />
-                  <span className="truncate">{o.label}</span>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+      {open && (phone || pos) && (
+        <>
+          {phone && <div className="fixed inset-0 z-[69] bg-black/40" onClick={() => close(false)} aria-hidden />}
+          <div
+            ref={menu}
+            style={phone ? undefined : { left: pos!.left, top: pos!.top, bottom: pos!.bottom, minWidth: Math.max(pos!.width, 192) }}
+            className={cn(
+              "fixed z-[70] overflow-hidden border bg-popover shadow-lg",
+              phone ? "inset-x-0 bottom-0 flex max-h-[75dvh] flex-col rounded-t-2xl pb-[env(safe-area-inset-bottom)]" : "rounded-xl",
+            )}
+          >
+            {phone && (
+              <div className="flex items-center justify-between border-b px-4 py-3">
+                <span className="truncate text-sm font-semibold">{ariaLabel || "Select"}</span>
+                <button type="button" aria-label="Close" onClick={() => close(false)} className="-mr-1.5 rounded-lg p-1.5 hover:bg-muted">
+                  <X className="size-5" />
+                </button>
+              </div>
+            )}
+            {showSearch && (
+              <div className="relative border-b p-2">
+                <Search className="pointer-events-none absolute left-4 top-4.5 size-4 text-muted-foreground" />
+                <input
+                  // No autofocus on phones: it pops the keyboard over the list before anyone has looked at it.
+                  autoFocus={!phone}
+                  value={q}
+                  onChange={(e) => {
+                    setQ(e.target.value);
+                    setActive(0);
+                  }}
+                  placeholder="Search…"
+                  aria-label="Search options"
+                  // 16px on phones: smaller text makes iOS Safari zoom the page on focus.
+                  className="h-10 w-full rounded-md border border-input bg-white pl-8 pr-2 text-base outline-none focus-visible:border-ring sm:h-9 sm:text-sm"
+                />
+              </div>
+            )}
+            <ul
+              ref={listRef}
+              id={listId}
+              role="listbox"
+              aria-label={ariaLabel}
+              className={cn("overflow-auto overscroll-contain p-1", phone ? "min-h-0 flex-1" : "max-h-64")}
+            >
+              {visible.length === 0 && <li className="px-3 py-3 text-center text-sm text-muted-foreground">No results</li>}
+              {visible.map((o, i) => {
+                const on = o.value === current;
+                return (
+                  <li
+                    key={o.value + i}
+                    data-i={i}
+                    role="option"
+                    aria-selected={on}
+                    aria-disabled={o.disabled}
+                    onMouseEnter={() => setActive(i)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => choose(o)}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-3 text-base sm:py-2 sm:text-sm",
+                      i === active && "bg-brand-light/50",
+                      on && "font-semibold",
+                      o.disabled && "cursor-not-allowed opacity-50",
+                    )}
+                  >
+                    <Check className={cn("size-4 shrink-0", on ? "opacity-100" : "opacity-0")} />
+                    <span className="truncate">{o.label}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </>
       )}
     </div>
   );

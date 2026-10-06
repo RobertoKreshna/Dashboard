@@ -103,8 +103,8 @@ export default async function PublicDashboard({
       <ListingFilterBar compact priceBounds={priceBounds} locations={locations} salesCodes={codes} />
 
       <MapHoverProvider>
-      <section aria-label="Map and listings" className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="h-[460px] rounded-xl border bg-card p-3 shadow-sm sm:p-4 lg:sticky lg:top-20 lg:h-[calc(100dvh-6.5rem)]">
+      <section aria-label="Map and listings" className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="min-w-0 rounded-xl border bg-card p-3 shadow-sm sm:p-4 lg:sticky lg:top-20 lg:h-[calc(100dvh-6.5rem)]">
           <ListingMap counts={counts} points={points} />
         </div>
 
