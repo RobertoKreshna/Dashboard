@@ -41,7 +41,7 @@ export default async function DealsPage({
       <div className="space-y-4">
         <DealFilterBar salesCodes={codes.map((c) => ({ code: c.code, name: c.name ?? "" }))} cities={cities} banks={banks} />
         {/* Phones and tablets: cards. Wide screens: the full table. */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:hidden">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
           {rows.length === 0 && (
             <p className="rounded-xl border bg-card py-12 text-center text-sm text-muted-foreground sm:col-span-2">No deals match these filters.</p>
           )}
@@ -80,8 +80,14 @@ export default async function DealsPage({
                 <dd className="text-right tabular-nums">{d.commissionAmount !== null ? formatIDR(d.commissionAmount) : "-"}</dd>
                 <dt className="text-muted-foreground">Payment</dt>
                 <dd className="text-right">{paymentLabel(d.paymentType, d.bankName)}</dd>
-                <dt className="text-muted-foreground">Sales</dt>
+                <dt className="text-muted-foreground">Sold by</dt>
                 <dd className="text-right">{d.salesCode}</dd>
+                {d.listingSalesCode && d.listingSalesCode !== d.salesCode && (
+                  <>
+                    <dt className="text-muted-foreground">Listed by</dt>
+                    <dd className="text-right">{d.listingSalesCode}</dd>
+                  </>
+                )}
               </dl>
             </div>
           ))}
@@ -102,7 +108,7 @@ export default async function DealsPage({
                 <TableHead>Listing</TableHead>
                 <TableHead>Property</TableHead>
                 <TableHead>Buyer / tenant</TableHead>
-                <TableHead>Sales</TableHead>
+                <TableHead>Sold by</TableHead>
                 <TableHead>Payment</TableHead>
                 <TableHead className="text-right">Final price</TableHead>
                 <TableHead className="text-right">Commission</TableHead>
@@ -134,7 +140,12 @@ export default async function DealsPage({
                     <div>{d.buyerName}</div>
                     {d.buyerPhone && <div className="text-xs text-muted-foreground">{d.buyerPhone}</div>}
                   </TableCell>
-                  <TableCell>{d.salesCode}</TableCell>
+                  <TableCell>
+                    <div>{d.salesCode}</div>
+                    {d.listingSalesCode && d.listingSalesCode !== d.salesCode && (
+                      <div className="text-xs text-muted-foreground">listed {d.listingSalesCode}</div>
+                    )}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <span className={d.paymentType ? "" : "text-muted-foreground"}>{paymentLabel(d.paymentType, d.bankName)}</span>
                   </TableCell>

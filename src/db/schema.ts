@@ -144,6 +144,8 @@ export const deals = pgTable(
     salesCode: text("sales_code")
       .notNull()
       .references(() => salesCodes.code, { onUpdate: "cascade", onDelete: "restrict" }),
+    // Who held the listing. Differs from salesCode (who sold it) when two agents shared the deal. Null = same agent.
+    listingSalesCode: text("listing_sales_code").references(() => salesCodes.code, { onUpdate: "cascade", onDelete: "restrict" }),
     commissionPercent: numeric("commission_percent", { precision: 6, scale: 3, mode: "number" }),
     commissionAmount: bigint("commission_amount", { mode: "number" }),
     // Nullable only because deals created before this column existed have no recorded payment type.
@@ -205,3 +207,18 @@ export type NewListing = typeof listings.$inferInsert;
 export type Deal = typeof deals.$inferSelect;
 export type SalesCode = typeof salesCodes.$inferSelect;
 export type ListingPhoto = typeof listingPhotos.$inferSelect;
+
+/** Who changed what. Written by server actions (src/lib/activity.ts); read on the staff Activity page. */
+export const activityLog = pgTable(
+  "activity_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    actor: text("actor").notNull(),
+    action: text("action").notNull(),
+    entity: text("entity").notNull(),
+    entityId: text("entity_id").notNull(),
+    summary: text("summary").notNull(),
+  },
+  (t) => [index("activity_log_at_idx").on(t.at)],
+);

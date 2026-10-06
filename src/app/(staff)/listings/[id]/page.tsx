@@ -9,6 +9,7 @@ import { photoUrl } from "@/lib/constants";
 import { formatDate, formatIDR } from "@/lib/format";
 import { ListingActions } from "@/components/listings/listing-actions";
 import { ListingInfo } from "@/components/listings/listing-info";
+import { ShareButtons } from "@/components/listings/share-button";
 import { PhotoGallery } from "@/components/listings/photo-gallery";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -39,7 +40,15 @@ export default async function ListingDetailPage({ params }: { params: Promise<{ 
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
         <PhotoGallery photos={detail.photos.map((p) => photoUrl(p.path)!)} title={l.title} />
-        <ListingInfo l={l} />
+        <div className="space-y-5">
+          <ListingInfo l={l} />
+          <ShareButtons
+            title={l.title}
+            price={`${formatIDR(l.price)}${l.listingType === "rent" && l.rentalPeriod ? ` / ${l.rentalPeriod}` : ""}`}
+            location={`${l.district}, ${l.city}`}
+            publicPath={`/listings-public/${l.id}`}
+          />
+        </div>
       </div>
 
       {l.notes && (

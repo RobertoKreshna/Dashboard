@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { getListingDetail } from "@/lib/listing-queries";
 import { photoUrl } from "@/lib/constants";
 import { ListingInfo } from "@/components/listings/listing-info";
+import { ShareButtons } from "@/components/listings/share-button";
+import { formatIDR } from "@/lib/format";
 import { PhotoGallery } from "@/components/listings/photo-gallery";
 
 export const dynamic = "force-dynamic";
@@ -25,12 +27,19 @@ export default async function PublicListingPage({ params }: { params: Promise<{ 
       </Link>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
         <PhotoGallery photos={detail.photos.map((p) => photoUrl(p.path)!)} title={l.title} />
-        <ListingInfo
-          l={{
-            ...l,
-            agentName: "agentName" in l ? (l.agentName as string) : "",
-          }}
-        />
+        <div className="space-y-5">
+          <ListingInfo
+            l={{
+              ...l,
+              agentName: "agentName" in l ? (l.agentName as string) : "",
+            }}
+          />
+          <ShareButtons
+            title={l.title}
+            price={`${formatIDR(l.price)}${l.listingType === "rent" && l.rentalPeriod ? ` / ${l.rentalPeriod}` : ""}`}
+            location={`${l.district}, ${l.city}`}
+          />
+        </div>
       </div>
     </div>
   );

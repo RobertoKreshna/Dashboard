@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
 import { deals, listings, salesCodes } from "@/db/schema";
+import { changedKeys, logActivity } from "@/lib/activity";
 import { requireUser } from "@/lib/auth";
 import { decimal, money, optStr, str, zodErrors } from "@/lib/form-utils";
 
@@ -32,7 +33,8 @@ const base = z.object({
   buyerPhone: z.string().nullable(),
   contractStart: date.nullable(),
   contractEnd: date.nullable(),
-  salesCode: z.string().min(1, "Sales code is required"),
+  salesCode: z.string().min(1, "Sold-by sales code is required"),
+  listingSalesCode: z.string().nullable(),
   paymentType: z.enum(["cash", "bank"], { error: "Choose Cash or Bank" }),
   bankName: z.string().max(60).nullable(),
   commissionMode: z.enum(["amount", "percent"]),
@@ -40,8 +42,14 @@ const base = z.object({
   notes: z.string().nullable(),
 });
 
+const DEAL_LABELS = {
+  dealType: "type", finalPrice: "final price", dealDate: "date", buyerName: "buyer", buyerPhone: "buyer phone",
+  contractStart: "contract start", contractEnd: "contract end", salesCode: "sold by", listingSalesCode: "listed by",
+  commissionAmount: "commission", paymentType: "payment", bankName: "bank", notes: "notes", listingId: "linked listing",
+} as const;
+
 export async function saveDeal(_prev: DealFormState, fd: FormData): Promise<DealFormState> {
-  await requireUser();
+  const user = await requireUser();
   const id = str(fd, "id");
   const listingId = optStr(fd, "listingId");
   const dealType = str(fd, "dealType");
@@ -89,6 +97,8 @@ export async function saveDeal(_prev: DealFormState, fd: FormData): Promise<Deal
       contractStart: dealType === "rent" ? optStr(fd, "contractStart") : null,
       contractEnd: dealType === "rent" ? optStr(fd, "contractEnd") : null,
       salesCode: str(fd, "salesCode"),
+      // Linked deals take the listing's agent; manual deals may name one (empty = the selling agent).
+      listingSalesCode: linked ? linked.salesCode : optStr(fd, "listingSalesCode"),
       paymentType: str(fd, "paymentType"),
       bankName: str(fd, "paymentType") === "bank" ? optStr(fd, "bankName") : null,
       commissionMode: str(fd, "commissionMode") === "percent" ? "percent" : "amount",
@@ -104,6 +114,13 @@ export async function saveDeal(_prev: DealFormState, fd: FormData): Promise<Deal
   const [existing] = id ? await db.select().from(deals).where(eq(deals.id, id)) : [];
   if (!agent.isActive && existing?.salesCode !== v.salesCode) {
     return { errors: { salesCode: "This sales code is inactive" } };
+  }
+  if (v.listingSalesCode && !listingId) {
+    const [lister] = await db.select().from(salesCodes).where(eq(salesCodes.code, v.listingSalesCode));
+    if (!lister) return { errors: { listingSalesCode: "Sales code not found" } };
+    if (!lister.isActive && existing?.listingSalesCode !== v.listingSalesCode) {
+      return { errors: { listingSalesCode: "This sales code is inactive" } };
+    }
   }
 
   const commissionPercent = commissionMode === "percent" ? commissionValue : null;
@@ -121,11 +138,12 @@ export async function saveDeal(_prev: DealFormState, fd: FormData): Promise<Deal
     commissionAmount,
   };
 
+  let dealId: string | undefined;
   await db.transaction(async (tx) => {
     if (existing) {
       await tx.update(deals).set(values).where(eq(deals.id, id));
     } else {
-      await tx.insert(deals).values(values);
+      [{ id: dealId }] = await tx.insert(deals).values(values).returning({ id: deals.id });
     }
     // Release the previous listing if the link moved or was removed.
     if (existing?.listingId && existing.listingId !== listingId) {
@@ -139,17 +157,28 @@ export async function saveDeal(_prev: DealFormState, fd: FormData): Promise<Deal
     }
   });
 
+  const what = `${v.buyerName} · ${v.address}`;
+  if (existing) {
+    const changed = [...new Set(changedKeys(existing, values, DEAL_LABELS))];
+    await logActivity({
+      actor: user.email, action: "updated", entity: "deal", entityId: existing.id,
+      summary: `${what}${changed.length ? ` · changed ${changed.join(", ")}` : ""}`,
+    });
+  } else {
+    await logActivity({ actor: user.email, action: "created", entity: "deal", entityId: dealId ?? "", summary: `${what} · ${v.salesCode}` });
+  }
   revalidateAll();
   redirect("/deals");
 }
 
 export async function deleteDeal(id: string): Promise<{ error?: string }> {
-  await requireUser();
+  const user = await requireUser();
   await db.transaction(async (tx) => {
     const [deal] = await tx.delete(deals).where(eq(deals.id, id)).returning();
     if (deal?.listingId) {
       await tx.update(listings).set({ status: "available" }).where(eq(listings.id, deal.listingId));
     }
+    if (deal) await logActivity({ actor: user.email, action: "deleted", entity: "deal", entityId: id, summary: `${deal.buyerName} · ${deal.address}` });
   });
   revalidateAll();
   return {};

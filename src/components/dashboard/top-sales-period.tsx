@@ -6,7 +6,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { NativeSelect } from "@/components/common/native-select";
 import { cn } from "@/lib/utils";
 
-export type Period = "month" | "year" | "all";
+import type { Period } from "@/lib/period";
+export type { Period };
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -43,7 +44,7 @@ export function TopSalesPeriod({
   };
   const shiftYear = (d: number) => set({ period: "year", y: String(year + d) });
 
-  const arrow = "rounded-lg border bg-white p-2 hover:bg-muted disabled:opacity-40";
+  const arrow = "shrink-0 rounded-lg border bg-white p-2 hover:bg-muted disabled:opacity-40";
 
   return (
     <div className={cn("flex flex-wrap items-center gap-2", pending && "opacity-70")}>
@@ -71,18 +72,18 @@ export function TopSalesPeriod({
       </div>
 
       {period === "month" && (
-        <>
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <button type="button" aria-label="Previous month" className={arrow} onClick={() => shiftMonth(-1)}>
             <ChevronLeft className="size-4" />
           </button>
-          <div className="w-36">
+          <div className="min-w-0 flex-1 sm:w-36 sm:flex-none">
             <NativeSelect aria-label="Month" value={String(month)} onChange={(e) => set({ period: "month", m: e.target.value })}>
               {MONTHS.map((m, i) => (
                 <option key={m} value={i + 1}>{m}</option>
               ))}
             </NativeSelect>
           </div>
-          <div className="w-24">
+          <div className="w-24 shrink-0">
             <NativeSelect aria-label="Year" value={String(year)} onChange={(e) => set({ period: "month", y: e.target.value })}>
               {years.map((y) => (
                 <option key={y} value={y}>{y}</option>
@@ -92,11 +93,11 @@ export function TopSalesPeriod({
           <button type="button" aria-label="Next month" className={arrow} onClick={() => shiftMonth(1)}>
             <ChevronRight className="size-4" />
           </button>
-        </>
+        </div>
       )}
 
       {period === "year" && (
-        <>
+        <div className="flex items-center gap-2">
           <button type="button" aria-label="Previous year" className={arrow} onClick={() => shiftYear(-1)}>
             <ChevronLeft className="size-4" />
           </button>
@@ -110,7 +111,7 @@ export function TopSalesPeriod({
           <button type="button" aria-label="Next year" className={arrow} onClick={() => shiftYear(1)}>
             <ChevronRight className="size-4" />
           </button>
-        </>
+        </div>
       )}
     </div>
   );

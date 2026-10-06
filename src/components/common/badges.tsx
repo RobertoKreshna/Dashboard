@@ -9,8 +9,8 @@ export function TypeBadge({ type }: { type: string }) {
       className={cn(
         base,
         type === "sell" || type === "sale"
-          ? "bg-brand-yellow text-[#1f2937]"
-          : "bg-brand-light text-[#1f2937]",
+          ? "bg-yellow-100 text-yellow-900"
+          : "bg-sky-100 text-sky-900",
       )}
     >
       {type === "sale" ? "Sale" : type === "rent" ? "Rent" : listingTypeLabel(type)}
@@ -20,9 +20,9 @@ export function TypeBadge({ type }: { type: string }) {
 
 const statusStyles: Record<string, string> = {
   available: "bg-emerald-100 text-emerald-900",
-  reserved: "bg-amber-100 text-amber-900",
+  reserved: "bg-orange-100 text-orange-900",
   sold: "bg-slate-200 text-slate-800",
-  rented: "bg-sky-100 text-sky-900",
+  rented: "bg-violet-100 text-violet-900",
 };
 
 export function StatusBadge({ status }: { status: string }) {

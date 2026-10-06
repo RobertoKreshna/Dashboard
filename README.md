@@ -9,12 +9,14 @@ Staff work in a login-protected admin area; one page, the **public Listing Dashb
 - Map-and-list property browser: a drill-down map (Indonesia → province → city → district → village) beside the matching listings. Hovering a listing highlights it on the map and the other way round; once a district is chosen, each listing is a marker.
 - Filters: search, sell/rent, property type, status (default *Available*), price range slider, bedrooms, bathrooms, city, district, sales code, sort.
 - Listing detail page with photo gallery, facilities, agent name and an "Open in Google Maps" link.
+- **Share on WhatsApp** (title, price, area and link) and **Copy link** buttons on each listing. On the staff listing page they share the public link.
 - Never exposes internal notes, agent phone/email, or anything about deals.
 
 **Staff (login required)**
 - **Dashboard** — active listings, deals and deal value this month, a listings map, a **Deals over time** line chart (by day for a month, by month for a year or all time; split by total, payment type incl. each bank, or salesperson) and **Top sales codes** for the chosen period.
 - **Listings** — create/edit/delete, photo upload with cover + drag-to-reorder, facilities (add your own), cascading Province → City → District → Village dropdowns, map coordinates, status, internal notes. "Mark as Done Deal" button.
-- **Done Deals** — create from a listing (pre-filled, listing status switches to Sold/Rented, back to Available if the deal is deleted) or manually; payment type (Cash / Bank, with ~118 Indonesian banks); commission amount or percentage; date-range, payment, sales and city filters; totals; **Excel/CSV export**.
+- **Done Deals** — create from a listing (pre-filled, listing status switches to Sold/Rented, back to Available if the deal is deleted) or manually; payment type (Cash / Bank, with ~118 Indonesian banks); commission amount or percentage, split between the agent who listed and the agent who sold (same agent: 60%; two agents: 30% each; the rest is the company's and isn't shown — see `src/lib/commission.ts`); date-range, payment, sales and city filters; totals; **Excel/CSV export**.
+- **Activity** — a log of who created, changed (with the fields that changed) or deleted listings, deals and sales codes, filterable by type. Recorded by the server actions in `src/lib/activity.ts`; only changes made after the log was added appear.
 - **Sales** (sales codes) — agents CRUD, active/inactive, deletion blocked while listings or deals still use the code.
 
 Rupiah formatting (`Rp 1.500.000.000`) and `dd/mm/yyyy` dates throughout.
@@ -69,7 +71,7 @@ Works with **bun** or **npm** (examples use bun; swap `bun run` ↔ `npm run`).
 
 ## Data model
 
-Tables: `sales_codes`, `facilities`, `listings`, `listing_photos`, `deals` (IDs like `LST-0001` / `DL-0001` come from Postgres sequences). Migrations live in `drizzle/`.
+Tables: `sales_codes`, `facilities`, `listings`, `listing_photos`, `deals`, `activity_log` (IDs like `LST-0001` / `DL-0001` come from Postgres sequences). Migrations live in `drizzle/`.
 Photos live in the public-read `listing-photos` bucket (`<listing-id>/<uuid>.<ext>`); uploads go straight from the browser to Storage (images only, 10 MB max, enforced by the bucket).
 
 ## Security
@@ -78,7 +80,7 @@ Photos live in the public-read `listing-photos` bucket (`<listing-id>/<uuid>.<ex
 
 | Layer | Protection |
 |---|---|
-| Database | RLS on every table; the only policy requires the staff role (`0004_staff_only_policies.sql`). `anon` has no table access. `TRUNCATE`/`TRIGGER`/`REFERENCES` revoked from API roles. |
+| Database | RLS on every table; the only policy requires the staff role (`0004_staff_only_policies.sql`; `activity_log` is read-only for staff, written only by the server). `anon` has no table access. `TRUNCATE`/`TRIGGER`/`REFERENCES` revoked from API roles. |
 | Public data | Public pages read only the `public_listings` / `public_listing_photos` views — no internal notes, agent phone/email or deals. |
 | Storage | Anyone can read photos; only staff can write. |
 | App | Every server action and the export route call `requireUser()`; server actions get Next's built-in origin (CSRF) check. Inputs are validated with zod; URL filters are whitelisted/clamped; all SQL is parameterised. |
@@ -134,14 +136,14 @@ Generated listings get coordinates inside their own village polygon (run `geo:bu
 ```
 src/
   app/
-    (staff)/            dashboard, listings, deals, sales-codes (login required)
+    (staff)/            dashboard, listings, deals, sales-codes, activity (login required)
     listings-public/    public map + list, listing detail
     login/              sign-in page + server actions
   components/
     listings/           map, filters, forms, photo manager, place pickers
     deals/  dashboard/  sales/  common/  layout/  ui/ (shadcn)
   db/                   Drizzle schema + client
-  lib/                  queries, formatting, geo name matching, Supabase clients
+  lib/                  queries, formatting, commission split, activity log, geo name matching, Supabase clients
   proxy.ts              auth redirect (Next 16 "proxy")
 drizzle/                SQL migrations
 scripts/                migrate, seed, seed-more, build-geo, helpers

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Loader2, Plus } from "lucide-react";
+import { ImagePlus, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -268,7 +268,7 @@ export function ListingForm({
       </section>
 
       <Section title="Agent & status">
-        <Field label="Sales code" required error={err.salesCode} htmlFor="salesCode">
+        <Field label="Listed by (sales code)" required error={err.salesCode} htmlFor="salesCode">
           <NativeSelect id="salesCode" name="salesCode" defaultValue={listing?.salesCode ?? ""} aria-invalid={!!err.salesCode}>
             <option value="" disabled>Select agent…</option>
             {agents.map((a) => (
@@ -293,7 +293,15 @@ export function ListingForm({
       </Section>
 
       {!listing && (
-        <p className="text-sm text-muted-foreground">You can upload photos right after saving.</p>
+        <section className="flex items-start gap-3 rounded-xl border border-dashed bg-card p-5">
+          <ImagePlus className="mt-0.5 size-5 shrink-0 text-brand-ink" />
+          <div>
+            <h2 className="text-base font-semibold">Photos</h2>
+            <p className="text-sm text-muted-foreground">
+              Next step: after you create the listing, you can add photos right away.
+            </p>
+          </div>
+        </section>
       )}
 
       <div className="flex flex-wrap justify-end gap-2">
@@ -301,7 +309,7 @@ export function ListingForm({
           Cancel
         </Link>
         <Button type="submit" size="lg" disabled={pending}>
-          {pending && <Loader2 className="animate-spin" />} {listing ? "Save changes" : "Create listing"}
+          {pending && <Loader2 className="animate-spin" />} {listing ? "Save changes" : "Create & add photos"}
         </Button>
       </div>
     </form>

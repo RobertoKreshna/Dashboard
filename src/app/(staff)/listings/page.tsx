@@ -46,7 +46,7 @@ export default async function ListingsPage({
       <div className="space-y-4">
         <ListingFilterBar compact priceBounds={priceBounds} locations={locations} salesCodes={codes} />
         {/* Phones and tablets: cards. Wide screens: the full table. */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:hidden">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
           {rows.length === 0 && (
             <p className="rounded-xl border bg-card py-12 text-center text-sm text-muted-foreground sm:col-span-2">No listings match these filters.</p>
           )}

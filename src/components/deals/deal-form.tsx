@@ -15,6 +15,7 @@ import { MoneyInput } from "@/components/common/money-input";
 import { NativeSelect } from "@/components/common/native-select";
 import { BANKS, PAYMENT_TYPES, PROPERTY_TYPES } from "@/lib/constants";
 import { formatIDR } from "@/lib/format";
+import { commissionSplit } from "@/lib/commission";
 import { cn } from "@/lib/utils";
 import {
   getListingForDeal,
@@ -41,6 +42,8 @@ export type DealFormValues = {
   contractStart: string;
   contractEnd: string;
   salesCode: string;
+  /** Agent who held the listing; "" = same as salesCode. */
+  listingSalesCode: string;
   paymentType: "cash" | "bank" | "";
   bankName: string;
   commissionMode: "amount" | "percent";
@@ -83,11 +86,23 @@ export function DealForm({ initial, agents }: { initial: DealFormValues; agents:
       province: l.province,
       listingPrice: l.price,
       finalPrice: x.finalPrice ?? l.price,
-      salesCode: l.salesCode,
+      salesCode: x.salesCode || l.salesCode,
+      listingSalesCode: l.salesCode,
     }));
   }
 
   const ro = linked ? { readOnly: true, className: "bg-muted" } : {};
+  const agentLabel = (code: string) => {
+    const a = agents.find((x) => x.code === code);
+    return a ? `${a.code} · ${a.fullName}` : code;
+  };
+  const commissionTotal =
+    v.commissionValue === null
+      ? 0
+      : v.commissionMode === "percent"
+        ? Math.round(((v.finalPrice ?? 0) * v.commissionValue) / 100)
+        : Math.round(v.commissionValue);
+  const split = v.salesCode && commissionTotal > 0 ? commissionSplit(commissionTotal, v.listingSalesCode, v.salesCode) : null;
 
   return (
     <form
@@ -109,10 +124,12 @@ export function DealForm({ initial, agents }: { initial: DealFormValues; agents:
         </p>
         {linked ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-brand-light/40 p-3">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Link2 className="size-4" />
-              <Link href={`/listings/${v.listingId}`} className="text-brand-ink hover:underline">{v.listingId}</Link>
-              <span className="text-muted-foreground">· {v.address}</span>
+            <div className="flex min-w-0 items-start gap-2 text-sm font-medium">
+              <Link2 className="mt-0.5 size-4 shrink-0" />
+              <div className="min-w-0">
+                <Link href={`/listings/${v.listingId}`} className="whitespace-nowrap text-brand-ink hover:underline">{v.listingId}</Link>
+                <span className="block break-words text-muted-foreground sm:inline"><span className="hidden sm:inline"> · </span>{v.address}</span>
+              </div>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={() => set("listingId", null)}>
               <Unlink /> Unlink (enter manually)
@@ -202,13 +219,30 @@ export function DealForm({ initial, agents }: { initial: DealFormValues; agents:
           <Field label="Buyer / tenant phone" error={err.buyerPhone} htmlFor="buyerPhone">
             <Input id="buyerPhone" name="buyerPhone" type="tel" value={v.buyerPhone} onChange={(e) => set("buyerPhone", e.target.value)} />
           </Field>
-          <Field label="Sales code" required error={err.salesCode} htmlFor="salesCode">
+          <Field label="Sold by (sales code)" required error={err.salesCode} htmlFor="salesCode" hint="The agent who closed the deal.">
             <NativeSelect id="salesCode" name="salesCode" value={v.salesCode} onChange={(e) => set("salesCode", e.target.value)} aria-invalid={!!err.salesCode}>
               <option value="" disabled>Select agent…</option>
               {agents.map((a) => (
                 <option key={a.code} value={a.code}>{a.code} · {a.fullName}{a.isActive ? "" : " (inactive)"}</option>
               ))}
             </NativeSelect>
+          </Field>
+          <Field
+            label="Listed by (sales code)"
+            error={err.listingSalesCode}
+            htmlFor="listingSalesCode"
+            hint={linked ? "From the linked listing." : "The agent who held the listing."}
+          >
+            {linked ? (
+              <Input id="listingSalesCode" value={agentLabel(v.listingSalesCode)} readOnly className="bg-muted" />
+            ) : (
+              <NativeSelect id="listingSalesCode" name="listingSalesCode" value={v.listingSalesCode} onChange={(e) => set("listingSalesCode", e.target.value)}>
+                <option value="">Same as sold by</option>
+                {agents.map((a) => (
+                  <option key={a.code} value={a.code}>{a.code} · {a.fullName}{a.isActive ? "" : " (inactive)"}</option>
+                ))}
+              </NativeSelect>
+            )}
           </Field>
           {v.dealType === "rent" && (
             <>
@@ -279,6 +313,20 @@ export function DealForm({ initial, agents }: { initial: DealFormValues; agents:
               <Input aria-label="Bank name" placeholder="Bank name" className="mt-2" value={bankOther} onChange={(e) => setBankOther(e.target.value)} />
             )}
           </Field>
+          {split && (
+            <div className="rounded-lg border bg-brand-light/30 p-3 text-sm sm:col-span-2 lg:col-span-3" aria-live="polite">
+              <p className="mb-2 font-medium">
+                Commission split · {formatIDR(commissionTotal)}
+                <span className="font-normal text-muted-foreground">
+                  {split.same ? " · same agent listed and sold" : " · different agents listed and sold"}
+                </span>
+              </p>
+              <div className="space-y-1.5">
+                <SplitRow name={split.same ? `${agentLabel(v.salesCode)} (listed & sold)` : `${agentLabel(v.salesCode)} (sold)`} rate={split.rate} amount={split.sold} />
+                {!split.same && <SplitRow name={`${agentLabel(v.listingSalesCode)} (listed)`} rate={split.rate} amount={split.listed} />}
+              </div>
+            </div>
+          )}
           <Field label="Notes" htmlFor="notes" className="sm:col-span-2 lg:col-span-3">
             <Textarea id="notes" name="notes" rows={3} value={v.notes} onChange={(e) => set("notes", e.target.value)} />
           </Field>
@@ -292,6 +340,18 @@ export function DealForm({ initial, agents }: { initial: DealFormValues; agents:
         </Button>
       </div>
     </form>
+  );
+}
+
+function SplitRow({ name, rate, amount }: { name: string; rate: number; amount: number }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+      <span className="min-w-0">{name}</span>
+      <span className="whitespace-nowrap">
+        <span className="mr-3 text-muted-foreground">{Math.round(rate * 100)}%</span>
+        <span className="font-semibold tabular-nums">{formatIDR(amount)}</span>
+      </span>
+    </div>
   );
 }
 

@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Handshake, Home, LayoutDashboard, LogOut, Menu, Users, X } from "lucide-react";
+import { Handshake, History, Home, LayoutDashboard, LogOut, Menu, Users, X } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ const NAV = [
   { href: "/listings", label: "Listings", icon: Home },
   { href: "/deals", label: "Done Deals", icon: Handshake },
   { href: "/sales-codes", label: "Sales", icon: Users },
+  { href: "/activity", label: "Activity", icon: History },
 ];
 
 export function StaffShell({
@@ -54,7 +55,7 @@ export function StaffShell({
           );
         })}
       </nav>
-      <div className="space-y-2 border-t p-4">
+      <div className="space-y-2 border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <p className="truncate text-xs text-muted-foreground" title={email}>{email}</p>
         <form action={signOutAction}>
           <button
@@ -93,7 +94,7 @@ export function StaffShell({
             className="absolute inset-0 bg-black/40"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col bg-sidebar shadow-xl">
+          <div className="absolute left-0 top-0 flex h-dvh w-72 max-w-[85%] flex-col bg-sidebar shadow-xl">
             <button
               aria-label="Close menu"
               className="absolute right-3 top-4 rounded-lg p-1.5 hover:bg-muted"

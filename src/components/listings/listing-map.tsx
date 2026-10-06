@@ -387,6 +387,9 @@ export default function ListingMap({
         { responsive: true, scrollZoom: !touch, displaylogo: false, displayModeBar: touch ? false : "hover", modeBarButtonsToRemove: ["select2d", "lasso2d", "toImage"] },
       );
 
+      // The box height changes with the level on phones, and Plotly only re-measures on window resizes.
+      Plotly.Plots.resize(node);
+
       drawn.current = {
         level: view.level,
         shapeTrace: withData.length ? 1 : -1,
@@ -530,7 +533,7 @@ export default function ListingMap({
         )}
       </div>
 
-      <div className="relative min-h-[360px] flex-1 lg:min-h-[320px] overflow-hidden rounded-xl border bg-[#f5f7fa]">
+      <div className={cn("relative flex-1 overflow-hidden rounded-xl border bg-[#f5f7fa]", level === "country" ? "max-sm:aspect-[17/10] max-sm:flex-none sm:min-h-[320px]" : "min-h-[360px] lg:min-h-[320px]")}>
         {loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
         <div ref={el} className="absolute inset-0" role="img" aria-label="Map of listing counts by region" />
         {points.length > 0 && (

@@ -215,7 +215,9 @@ export async function seedBulk(
       buyerPhone: `08${Math.floor(1e9 + r() * 8e9)}`,
       contractStart: sale ? null : iso(ago - 5),
       contractEnd: sale ? null : `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`,
-      salesCode: row.salesCode,
+      // ~1/3 of listed deals were closed by a different agent than the one who held the listing.
+      salesCode: listingId && r() < 0.35 ? pick(salesCodes.filter((c) => c !== row.salesCode)) ?? row.salesCode : row.salesCode,
+      listingSalesCode: listingId ? row.salesCode : null,
       commissionPercent: pct,
       commissionAmount: Math.round(sale ? (finalPrice * pct!) / 100 : finalPrice * 0.1),
     } satisfies typeof deals.$inferInsert;

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
 import { facilities, listingPhotos, listings, salesCodes } from "@/db/schema";
+import { changedKeys, logActivity } from "@/lib/activity";
 import { requireUser } from "@/lib/auth";
 import { PHOTO_BUCKET } from "@/lib/constants";
 import { decimal, integer, money, optStr, str, zodErrors } from "@/lib/form-utils";
@@ -56,11 +57,19 @@ function parseCoordinates(raw: string): [number, number] | null {
   return m ? [Number(m[1]), Number(m[2])] : null;
 }
 
+const LISTING_LABELS = {
+  title: "title", listingType: "type", price: "price", rentalPeriod: "rental period", propertyType: "property type",
+  address: "address", village: "village", district: "district", city: "city", province: "province",
+  postalCode: "postal code", landArea: "land area", buildingArea: "building area", bedrooms: "bedrooms",
+  bathrooms: "bathrooms", electricityWatts: "electricity", latitude: "coordinates", longitude: "coordinates",
+  salesCode: "sales code", status: "status", notes: "notes", facilities: "facilities",
+} as const;
+
 export async function saveListing(
   _prev: ListingFormState,
   fd: FormData,
 ): Promise<ListingFormState> {
-  await requireUser();
+  const user = await requireUser();
   const id = str(fd, "id");
   const listingType = str(fd, "listingType");
 
@@ -103,10 +112,17 @@ export async function saveListing(
   const values = { ...v, facilities: [...new Set(v.facilities)] };
   let listingId = id;
   if (id) {
+    const [before] = await db.select().from(listings).where(eq(listings.id, id));
     await db.update(listings).set(values).where(eq(listings.id, id));
+    const changed = before ? [...new Set(changedKeys(before, values, LISTING_LABELS))] : [];
+    await logActivity({
+      actor: user.email, action: "updated", entity: "listing", entityId: id,
+      summary: `${v.title}${changed.length ? ` · changed ${changed.join(", ")}` : ""}`,
+    });
   } else {
     const [row] = await db.insert(listings).values({ ...values, status: "available" }).returning({ id: listings.id });
     listingId = row.id;
+    await logActivity({ actor: user.email, action: "created", entity: "listing", entityId: listingId, summary: `${v.title} · ${v.city}` });
   }
   revalidatePath("/listings");
   revalidatePath("/listings-public");
@@ -115,7 +131,8 @@ export async function saveListing(
 }
 
 export async function deleteListing(id: string): Promise<{ error?: string }> {
-  await requireUser();
+  const user = await requireUser();
+  const [gone] = await db.select({ title: listings.title }).from(listings).where(eq(listings.id, id));
   const photos = await db.select({ path: listingPhotos.path }).from(listingPhotos).where(eq(listingPhotos.listingId, id));
   if (photos.length) {
     const supabase = await createClient();
@@ -123,6 +140,7 @@ export async function deleteListing(id: string): Promise<{ error?: string }> {
   }
   // Deals keep their copied property details; their listing link is nulled by the FK.
   await db.delete(listings).where(eq(listings.id, id));
+  await logActivity({ actor: user.email, action: "deleted", entity: "listing", entityId: id, summary: gone?.title ?? id });
   revalidatePath("/listings");
   revalidatePath("/listings-public");
   revalidatePath("/");

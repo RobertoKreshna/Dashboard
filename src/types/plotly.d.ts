@@ -5,6 +5,7 @@ declare module "plotly.js-geo-dist-min" {
     restyle: (el: HTMLElement, update: Record<string, unknown>, traces?: number[]) => Promise<unknown>;
     setPlotConfig: (config: { topojsonURL?: string }) => void;
     purge: (el: HTMLElement) => void;
+    Plots: { resize: (el: HTMLElement) => void };
   };
   export default Plotly;
 }

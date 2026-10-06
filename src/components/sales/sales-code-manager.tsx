@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
-import { Loader2, Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Loader2, Pencil, Plus, Power, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,10 @@ import {
 } from "@/components/ui/table";
 import { Field } from "@/components/common/field";
 import { ConfirmDialog } from "@/components/common/confirm-delete";
-import { formatDate } from "@/lib/format";
+import { NativeSelect } from "@/components/common/native-select";
+import { FilterModal } from "@/components/common/filter-modal";
+import { TopSalesPeriod, type Period } from "@/components/dashboard/top-sales-period";
+import { formatDate, formatIDR } from "@/lib/format";
 import {
   deleteSalesCode,
   saveSalesCode,
@@ -41,32 +44,64 @@ type Row = {
   updatedAt: string;
   listingCount: number;
   dealCount: number;
+  commission: number;
 };
+
+const SORT_LABELS = [
+  ["code", "Code"],
+  ["name", "Name (A–Z)"],
+  ["commission", "Most commission"],
+  ["deals", "Most deals"],
+  ["listings", "Most listings"],
+] as const;
 
 export function SalesCodeManager({
   rows,
   initialQuery,
+  sort,
+  period,
 }: {
   rows: Row[];
   initialQuery: string;
+  sort: string;
+  period: { period: Period; month: number; year: number; years: number[]; label: string };
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
   const [q, setQ] = React.useState(initialQuery);
   const [editing, setEditing] = React.useState<Row | "new" | null>(null);
   const [deleting, setDeleting] = React.useState<Row | null>(null);
+  const [filtersOpen, setFiltersOpen] = React.useState(false);
   const [, startToggle] = React.useTransition();
+
+  // Search and sort live in the URL next to the period (period, m, y), so keep the other params when one changes.
+  const setParam = React.useCallback(
+    (patch: Record<string, string | null>) => {
+      const next = new URLSearchParams(params.toString());
+      for (const [k, v] of Object.entries(patch)) {
+        if (v) next.set(k, v);
+        else next.delete(k);
+      }
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [params, pathname, router],
+  );
 
   React.useEffect(() => {
     if (q === initialQuery) return;
-    const t = setTimeout(
-      () =>
-        router.replace(
-          q ? `/sales-codes?q=${encodeURIComponent(q)}` : "/sales-codes",
-        ),
-      350,
-    );
+    const t = setTimeout(() => setParam({ q: q || null }), 350);
     return () => clearTimeout(t);
-  }, [q, initialQuery, router]);
+  }, [q, initialQuery, setParam]);
+
+  const sortSelect = (
+    <NativeSelect aria-label="Sort by" value={sort} onChange={(e) => setParam({ sort: e.target.value === "code" ? null : e.target.value })}>
+      {SORT_LABELS.map(([v, l]) => (
+        <option key={v} value={v}>Sort: {l}</option>
+      ))}
+    </NativeSelect>
+  );
 
   const rowActions = (r: (typeof rows)[number]) => (
     <div className="flex justify-end gap-1">
@@ -122,8 +157,8 @@ export function SalesCodeManager({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative w-full sm:max-w-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-64">
           <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
           <Input
             aria-label="Search sales codes"
@@ -133,13 +168,37 @@ export function SalesCodeManager({
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
-        <Button onClick={() => setEditing("new")}>
+        {/* Wide screens: period and sort inline. Phones: tucked behind one Filters button. */}
+        <div className="hidden flex-wrap items-center gap-2 sm:flex">
+          <TopSalesPeriod period={period.period} month={period.month} year={period.year} years={period.years} />
+          <div className="w-48">{sortSelect}</div>
+        </div>
+        <Button type="button" variant="outline" className="sm:hidden" onClick={() => setFiltersOpen(true)}>
+          <SlidersHorizontal /> {period.label}
+        </Button>
+        <Button className="ml-auto" onClick={() => setEditing("new")}>
           <Plus /> New sales
         </Button>
       </div>
+      {filtersOpen && (
+        <FilterModal
+          onClose={() => setFiltersOpen(false)}
+          onApply={() => setFiltersOpen(false)}
+          onReset={() => setParam({ period: null, m: null, y: null, sort: null })}
+        >
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold">Period</h3>
+            <TopSalesPeriod period={period.period} month={period.month} year={period.year} years={period.years} />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold">Sort by</h3>
+            {sortSelect}
+          </div>
+        </FilterModal>
+      )}
 
       {/* Phones and tablets: cards. Wide screens: the full table. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:hidden">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
         {rows.length === 0 && (
           <p className="rounded-xl border bg-card py-10 text-center text-sm text-muted-foreground sm:col-span-2">No sales codes found.</p>
         )}
@@ -158,8 +217,12 @@ export function SalesCodeManager({
             <p className="break-words text-sm text-muted-foreground">
               {r.phone || "-"} · {r.email || "-"}
             </p>
+            <p className="flex flex-wrap justify-between gap-x-3 text-sm">
+              <span className="text-muted-foreground">Commission · {period.label}</span>
+              <span className="font-semibold tabular-nums">{formatIDR(r.commission)}</span>
+            </p>
             <p className="text-xs text-muted-foreground">
-              {r.listingCount} listing{r.listingCount === 1 ? "" : "s"} · {r.dealCount} deal{r.dealCount === 1 ? "" : "s"} · updated {formatDate(r.updatedAt)}
+              {r.listingCount} listing{r.listingCount === 1 ? "" : "s"} · {r.dealCount} deal{r.dealCount === 1 ? "" : "s"} in period · updated {formatDate(r.updatedAt)}
             </p>
           </div>
         ))}
@@ -172,9 +235,10 @@ export function SalesCodeManager({
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Phone</TableHead>
-              <TableHead>Email</TableHead>
+              <TableHead className="hidden 2xl:table-cell">Email</TableHead>
               <TableHead className="text-right">Listings</TableHead>
-              <TableHead className="text-right">Deals</TableHead>
+              <TableHead className="text-right" title="Deals closed in the selected period">Deals</TableHead>
+              <TableHead className="text-right">Commission</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Updated</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -184,7 +248,7 @@ export function SalesCodeManager({
             {rows.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={10}
                   className="py-10 text-center text-muted-foreground"
                 >
                   No sales codes found.
@@ -196,13 +260,14 @@ export function SalesCodeManager({
                 <TableCell className="font-semibold">{r.code}</TableCell>
                 <TableCell>{r.fullName}</TableCell>
                 <TableCell>{r.phone || "-"}</TableCell>
-                <TableCell>{r.email || "-"}</TableCell>
+                <TableCell className="hidden 2xl:table-cell">{r.email || "-"}</TableCell>
                 <TableCell className="text-right tabular-nums">
                   {r.listingCount}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {r.dealCount}
                 </TableCell>
+                <TableCell className="text-right tabular-nums">{formatIDR(r.commission)}</TableCell>
                 <TableCell>
                   {statusBadge(r.isActive)}
                 </TableCell>

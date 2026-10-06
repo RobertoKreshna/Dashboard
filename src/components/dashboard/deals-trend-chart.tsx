@@ -57,7 +57,8 @@ export function DealsTrendChart({ trend, by, periodLabel }: { trend: DealTrend; 
       if (dead) return;
       // x values are the long labels (shown as the hover header); tick text is the short form.
       const x = trend.buckets.map((b) => longLabel(b, trend.granularity));
-      const every = trend.granularity === "day" ? 3 : 1;
+      const narrow = node.clientWidth < 420;
+      const every = trend.granularity === "day" ? (narrow ? 6 : 3) : narrow ? 2 : 1;
       const tickIdx = trend.buckets.map((_, i) => i).filter((i) => i % every === 0 || i === trend.buckets.length - 1);
       const data = trend.series.map((s, i) => ({
         type: "scatter",
@@ -79,7 +80,7 @@ export function DealsTrendChart({ trend, by, periodLabel }: { trend: DealTrend; 
         node,
         data,
         {
-          margin: { l: 108, r: 16, t: 8, b: 74 },
+          margin: { l: narrow ? 92 : 108, r: 16, t: 8, b: 74 },
           paper_bgcolor: "rgba(0,0,0,0)",
           plot_bgcolor: "rgba(0,0,0,0)",
           font: { family: "Inter, system-ui, sans-serif", color: "#1f2937", size: 12 },

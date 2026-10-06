@@ -36,6 +36,20 @@
       "when": 1791272455556,
       "tag": "0004_staff_only_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791287633971,
+      "tag": "0005_deal_listing_sales_code",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791293021119,
+      "tag": "0006_activity_log",
+      "breakpoints": true
     }
   ]
 }

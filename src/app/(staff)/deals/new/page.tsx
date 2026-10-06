@@ -32,6 +32,7 @@ export default async function NewDealPage({
     contractStart: "",
     contractEnd: "",
     salesCode: "",
+    listingSalesCode: "",
     paymentType: "",
     bankName: "",
     commissionMode: "amount",
@@ -56,15 +57,18 @@ export default async function NewDealPage({
         listingPrice: l.price,
         finalPrice: l.price,
         salesCode: l.salesCode,
+        listingSalesCode: l.salesCode,
       });
     } else if (existing) {
       notice = `${listingId} already has a deal (${existing.id}).`;
     }
   }
   // The listing's agent may have been deactivated; keep them selectable.
-  if (initial.salesCode && !agents.some((a) => a.code === initial.salesCode)) {
-    const [a] = await db.select().from(salesCodes).where(eq(salesCodes.code, initial.salesCode));
-    if (a) agents.push(a);
+  for (const code of [initial.salesCode, initial.listingSalesCode]) {
+    if (code && !agents.some((a) => a.code === code)) {
+      const [a] = await db.select().from(salesCodes).where(eq(salesCodes.code, code));
+      if (a) agents.push(a);
+    }
   }
 
   return (

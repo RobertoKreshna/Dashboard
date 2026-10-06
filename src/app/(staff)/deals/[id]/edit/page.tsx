@@ -14,7 +14,7 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
   const agents = await db
     .select()
     .from(salesCodes)
-    .where(or(eq(salesCodes.isActive, true), eq(salesCodes.code, d.salesCode)))
+    .where(or(eq(salesCodes.isActive, true), eq(salesCodes.code, d.salesCode), eq(salesCodes.code, d.listingSalesCode ?? d.salesCode)))
     .orderBy(asc(salesCodes.code));
 
   return (
@@ -40,6 +40,7 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
           contractStart: d.contractStart ?? "",
           contractEnd: d.contractEnd ?? "",
           salesCode: d.salesCode,
+          listingSalesCode: d.listingSalesCode ?? "",
           paymentType: d.paymentType ?? "",
           bankName: d.bankName ?? "",
           commissionMode: d.commissionPercent !== null ? "percent" : "amount",

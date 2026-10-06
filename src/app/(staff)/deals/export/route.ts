@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { parseDealFilters, queryDeals } from "@/lib/deal-queries";
 import { dealSourceLabel, dealTypeLabel, propertyTypeLabel } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
+import { commissionSplit } from "@/lib/commission";
 
 /**
  * Spreadsheet apps run cells that start with = + - @ as formulas ("CSV injection"). Buyer names, notes and
@@ -19,7 +20,9 @@ export async function GET(req: Request) {
   const sp = Object.fromEntries(url.searchParams);
   const { rows, totals } = await queryDeals(parseDealFilters(sp), { all: true });
 
-  const data = rows.map((d) => ({
+  const data = rows.map((d) => {
+    const split = d.commissionAmount !== null ? commissionSplit(d.commissionAmount, d.listingSalesCode, d.salesCode) : null;
+    return {
     "Deal ID": d.id,
     "Deal date": formatDate(d.dealDate),
     "Deal type": dealTypeLabel(d.dealType),
@@ -37,13 +40,17 @@ export async function GET(req: Request) {
     "Buyer phone": d.buyerPhone ?? "",
     "Contract start": formatDate(d.contractStart),
     "Contract end": formatDate(d.contractEnd),
-    "Sales code": d.salesCode,
+    "Sold by (sales code)": d.salesCode,
+    "Listed by (sales code)": d.listingSalesCode ?? d.salesCode,
     "Payment type": d.paymentType === "cash" ? "Cash" : d.paymentType === "bank" ? "Bank" : "",
     Bank: d.bankName ?? "",
     "Commission %": d.commissionPercent ?? "",
     "Commission (IDR)": d.commissionAmount ?? "",
+    "Selling agent share (IDR)": split?.sold ?? "",
+    "Listing agent share (IDR)": split ? split.listed : "",
     Notes: d.notes ?? "",
-  }));
+    };
+  });
   data.push({ "Deal ID": `TOTAL (${totals.count} deals)`, "Final price (IDR)": totals.value, "Commission (IDR)": totals.commission } as never);
 
   const ws = XLSX.utils.json_to_sheet(data.map((row) => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, safeCell(v)]))));

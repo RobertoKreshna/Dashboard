@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { and, count, desc, eq, gte, inArray, lt, min, sql, sum } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lt, sql, sum } from "drizzle-orm";
 import { Building2, CalendarCheck, Handshake, MapPin, Trophy } from "lucide-react";
 import { db } from "@/db";
 import { deals, listings, salesCodes } from "@/db/schema";
 import { PageHeader } from "@/components/common/page-header";
 import { DealsTrendChart } from "@/components/dashboard/deals-trend-chart";
 import { getDealTrend, type TrendBy } from "@/lib/deal-trend";
-import { TopSalesPeriod, type Period } from "@/components/dashboard/top-sales-period";
+import { PeriodFilter } from "@/components/dashboard/period-filter";
+import { dealYears, parsePeriod } from "@/lib/period";
 import { ListingMap } from "@/components/listings/listing-map-loader";
 import { getMapCounts, getMapPoints, parseListingFilters } from "@/lib/listing-queries";
 import { formatIDR } from "@/lib/format";
@@ -48,28 +49,8 @@ export default async function DashboardPage({
   const [mapCounts, mapPoints] = await Promise.all([getMapCounts(mapFilters), getMapPoints(mapFilters)]);
   // ---- Top sales codes period ----
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
-  const nowD = new Date();
-  const period = (["month", "year", "all"].includes(one(sp.period)) ? one(sp.period) : "month") as Period;
-  const pYear = Math.min(2100, Math.max(2000, Number(one(sp.y)) || nowD.getFullYear()));
-  const pMonth = Math.min(12, Math.max(1, Number(one(sp.m)) || nowD.getMonth() + 1));
-  const ymd = (y: number, m: number, d = 1) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-  let range: { gte?: string; lt?: string } = {};
-  let periodLabel = "All time";
-  if (period === "month") {
-    range = { gte: ymd(pYear, pMonth), lt: pMonth === 12 ? ymd(pYear + 1, 1) : ymd(pYear, pMonth + 1) };
-    periodLabel = new Date(pYear, pMonth - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-  } else if (period === "year") {
-    range = { gte: ymd(pYear, 1), lt: ymd(pYear + 1, 1) };
-    periodLabel = String(pYear);
-  }
-  const [{ firstDeal }] = await db.select({ firstDeal: min(deals.dealDate) }).from(deals);
-  const firstYear = firstDeal ? Number(firstDeal.slice(0, 4)) : nowD.getFullYear();
-  const years: number[] = [];
-  for (let y = nowD.getFullYear(); y >= Math.min(firstYear, nowD.getFullYear()); y--) years.push(y);
-  if (!years.includes(pYear)) {
-    years.push(pYear);
-    years.sort((a, b) => b - a);
-  }
+  const { period, year: pYear, month: pMonth, range, label: periodLabel } = parsePeriod(sp);
+  const years = await dealYears(pYear);
 
   const by = (["total", "payment", "sales"].includes(one(sp.by)) ? one(sp.by) : "total") as TrendBy;
   const trend = await getDealTrend({ period, year: pYear, month: pMonth, by });
@@ -145,7 +126,7 @@ export default async function DashboardPage({
           <h2 className="text-lg font-semibold">Deals</h2>
           <p className="text-sm text-muted-foreground">{periodLabel}</p>
         </div>
-        <TopSalesPeriod period={period} month={pMonth} year={pYear} years={years} />
+        <PeriodFilter period={period} month={pMonth} year={pYear} years={years} label={periodLabel} />
       </div>
 
       <div className="mt-4">
