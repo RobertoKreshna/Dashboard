@@ -1,0 +1,207 @@
+import { sql } from "drizzle-orm";
+import {
+  bigint,
+  boolean,
+  date,
+  index,
+  integer,
+  numeric,
+  pgEnum,
+  pgSequence,
+  pgTable,
+  pgView,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
+
+export const listingTypeEnum = pgEnum("listing_type", ["sell", "rent"]);
+export const rentalPeriodEnum = pgEnum("rental_period", ["month", "year"]);
+export const listingStatusEnum = pgEnum("listing_status", [
+  "available",
+  "reserved",
+  "sold",
+  "rented",
+]);
+export const propertyTypeEnum = pgEnum("property_type", [
+  "house",
+  "apartment",
+  "land",
+  "ruko",
+  "office",
+  "warehouse",
+  "villa",
+  "other",
+]);
+export const dealTypeEnum = pgEnum("deal_type", ["sale", "rent"]);
+export const paymentTypeEnum = pgEnum("payment_type", ["cash", "bank"]);
+export const dealSourceEnum = pgEnum("deal_source", ["listing", "manual"]);
+
+export const listingSeq = pgSequence("listing_seq", { startWith: 1 });
+export const dealSeq = pgSequence("deal_seq", { startWith: 1 });
+
+const timestamps = {
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+};
+
+export const salesCodes = pgTable("sales_codes", {
+  code: text("code").primaryKey(),
+  fullName: text("full_name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  isActive: boolean("is_active").notNull().default(true),
+  ...timestamps,
+});
+
+export const facilities = pgTable("facilities", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+});
+
+export const listings = pgTable(
+  "listings",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`'LST-' || lpad(nextval('listing_seq')::text, 4, '0')`),
+    title: text("title").notNull(),
+    listingType: listingTypeEnum("listing_type").notNull(),
+    price: bigint("price", { mode: "number" }).notNull(),
+    rentalPeriod: rentalPeriodEnum("rental_period"),
+    propertyType: propertyTypeEnum("property_type").notNull(),
+    address: text("address").notNull(),
+    village: text("village").notNull(),
+    district: text("district").notNull(),
+    city: text("city").notNull(),
+    province: text("province").notNull(),
+    postalCode: text("postal_code"),
+    landArea: numeric("land_area", { precision: 12, scale: 2, mode: "number" }),
+    buildingArea: numeric("building_area", { precision: 12, scale: 2, mode: "number" }),
+    bedrooms: integer("bedrooms").notNull().default(0),
+    bathrooms: integer("bathrooms").notNull().default(0),
+    facilities: text("facilities").array().notNull().default(sql`'{}'::text[]`),
+    electricityWatts: integer("electricity_watts"),
+    latitude: numeric("latitude", { precision: 9, scale: 6, mode: "number" }),
+    longitude: numeric("longitude", { precision: 9, scale: 6, mode: "number" }),
+    salesCode: text("sales_code")
+      .notNull()
+      .references(() => salesCodes.code, { onUpdate: "cascade", onDelete: "restrict" }),
+    status: listingStatusEnum("status").notNull().default("available"),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => [
+    index("listings_status_idx").on(t.status),
+    index("listings_city_idx").on(t.city),
+    index("listings_sales_code_idx").on(t.salesCode),
+  ],
+);
+
+export const listingPhotos = pgTable(
+  "listing_photos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    listingId: text("listing_id")
+      .notNull()
+      .references(() => listings.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    path: text("path").notNull(),
+    position: integer("position").notNull().default(0),
+    isCover: boolean("is_cover").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("listing_photos_listing_idx").on(t.listingId)],
+);
+
+export const deals = pgTable(
+  "deals",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`'DL-' || lpad(nextval('deal_seq')::text, 4, '0')`),
+    listingId: text("listing_id").references(() => listings.id, {
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
+    source: dealSourceEnum("source").notNull(),
+    dealType: dealTypeEnum("deal_type").notNull(),
+    propertyType: propertyTypeEnum("property_type").notNull(),
+    address: text("address").notNull(),
+    village: text("village"),
+    district: text("district"),
+    city: text("city").notNull(),
+    province: text("province"),
+    listingPrice: bigint("listing_price", { mode: "number" }),
+    finalPrice: bigint("final_price", { mode: "number" }).notNull(),
+    dealDate: date("deal_date", { mode: "string" }).notNull(),
+    buyerName: text("buyer_name").notNull(),
+    buyerPhone: text("buyer_phone"),
+    contractStart: date("contract_start", { mode: "string" }),
+    contractEnd: date("contract_end", { mode: "string" }),
+    salesCode: text("sales_code")
+      .notNull()
+      .references(() => salesCodes.code, { onUpdate: "cascade", onDelete: "restrict" }),
+    commissionPercent: numeric("commission_percent", { precision: 6, scale: 3, mode: "number" }),
+    commissionAmount: bigint("commission_amount", { mode: "number" }),
+    // Nullable only because deals created before this column existed have no recorded payment type.
+    paymentType: paymentTypeEnum("payment_type"),
+    bankName: text("bank_name"),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => [
+    index("deals_date_idx").on(t.dealDate),
+    index("deals_listing_idx").on(t.listingId),
+    index("deals_sales_code_idx").on(t.salesCode),
+  ],
+);
+
+/**
+ * Public, read-only views (created in the custom SQL migration). They expose
+ * no internal notes, no agent phone/email and nothing about deals.
+ */
+export const publicListings = pgView("public_listings", {
+  id: text("id").notNull(),
+  title: text("title").notNull(),
+  listingType: listingTypeEnum("listing_type").notNull(),
+  price: bigint("price", { mode: "number" }).notNull(),
+  rentalPeriod: rentalPeriodEnum("rental_period"),
+  propertyType: propertyTypeEnum("property_type").notNull(),
+  address: text("address").notNull(),
+  village: text("village").notNull(),
+  district: text("district").notNull(),
+  city: text("city").notNull(),
+  province: text("province").notNull(),
+  postalCode: text("postal_code"),
+  landArea: numeric("land_area", { mode: "number" }),
+  buildingArea: numeric("building_area", { mode: "number" }),
+  bedrooms: integer("bedrooms").notNull(),
+  bathrooms: integer("bathrooms").notNull(),
+  facilities: text("facilities").array().notNull(),
+  electricityWatts: integer("electricity_watts"),
+  salesCode: text("sales_code").notNull(),
+  agentName: text("agent_name").notNull(),
+  status: listingStatusEnum("status").notNull(),
+  coverPath: text("cover_path"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  latitude: numeric("latitude", { mode: "number" }),
+  longitude: numeric("longitude", { mode: "number" }),
+}).existing();
+
+export const publicListingPhotos = pgView("public_listing_photos", {
+  id: uuid("id").notNull(),
+  listingId: text("listing_id").notNull(),
+  path: text("path").notNull(),
+  position: integer("position").notNull(),
+  isCover: boolean("is_cover").notNull(),
+}).existing();
+
+export type Listing = typeof listings.$inferSelect;
+export type NewListing = typeof listings.$inferInsert;
+export type Deal = typeof deals.$inferSelect;
+export type SalesCode = typeof salesCodes.$inferSelect;
+export type ListingPhoto = typeof listingPhotos.$inferSelect;
