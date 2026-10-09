@@ -4,8 +4,8 @@ import { db } from "@/db";
 import { publicListings } from "@/db/schema";
 import { siteUrl } from "@/lib/site";
 
-// Rebuilt at most hourly; the sitemap only needs to be roughly fresh.
-export const revalidate = 3600;
+// Rendered per request, not at build time: the build runs many workers and would exhaust the DB pooler.
+export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
