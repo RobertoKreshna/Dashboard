@@ -51,6 +51,8 @@ const cumulative = (a: number[]) => {
   let sum = 0;
   return a.map((v) => (sum += v));
 };
+/** Widths are compared in 40px steps so a drag-resize doesn't redraw on every pixel. */
+const snap = (w: number) => Math.round(w / 40) * 40;
 const plural = (n: number) => `${n} deal${n === 1 ? "" : "s"}`;
 const sum = (a: number[], n: number) => a.slice(0, n).reduce((x, y) => x + y, 0);
 
@@ -215,6 +217,20 @@ export function DealsTrendChart({ trend, by, periodLabel }: { trend: DealTrend; 
     };
   }, [picked]);
 
+  // Re-thin the axis labels when the chart is resized (window, sidebar, rotation), not only on first draw.
+  const usedWidth = React.useRef(0);
+  const [width, setWidth] = React.useState(0);
+  React.useEffect(() => {
+    const node = el.current;
+    if (!node || !hasData) return;
+    const ro = new ResizeObserver(() => {
+      const w = snap(node.clientWidth);
+      if (w !== usedWidth.current) setWidth(w);
+    });
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, [hasData]);
+
   React.useEffect(() => {
     const node = el.current;
     if (!node || !hasData) return;
@@ -225,9 +241,12 @@ export function DealsTrendChart({ trend, by, periodLabel }: { trend: DealTrend; 
       // x values are the long labels (shown as the hover header); tick text is the short form.
       const x = trend.buckets.map((b) => longLabel(b, trend.granularity));
       const width = node.clientWidth;
+      usedWidth.current = snap(width);
       const narrow = width < 420;
-      const every = days ? (narrow ? 6 : width < 760 ? 2 : 1) : narrow ? 2 : 1;
-      const tickIdx = trend.buckets.map((_, i) => i).filter((i) => i % every === 0 || i === n - 1);
+      // Show every label that fits (about 36px each: "Sen" over a date), thinning evenly when space runs out.
+      const plotWidth = width - (narrow ? 92 : 108) - 16;
+      const every = Math.max(1, Math.ceil((days ? 36 : 56) / (plotWidth / n)));
+      const tickIdx = trend.buckets.map((_, i) => i).filter((i) => i % every === 0);
 
       const compare = !!prev;
       const bars = compare && view === "daily";
@@ -377,7 +396,7 @@ export function DealsTrendChart({ trend, by, periodLabel }: { trend: DealTrend; 
     return () => {
       dead = true;
     };
-  }, [trend, hasData, periodLabel, view, picked, days, n, elapsed, prev, compared]);
+  }, [trend, hasData, periodLabel, view, picked, days, n, elapsed, prev, compared, width]);
 
   React.useEffect(() => {
     const node = el.current;
