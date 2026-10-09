@@ -3,7 +3,7 @@
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Feature, FeatureCollection } from "geojson";
-import { Check, ChevronDown, ChevronRight, Search, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Loader2, Search, X } from "lucide-react";
 import { buildRegencyIndex, cityKey, placeKey, provinceKey } from "@/lib/geo";
 import { formatIDR } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -140,6 +140,7 @@ export default function ListingMap({
   React.useEffect(() => {
     paramsRef.current = params;
   }, [params]);
+  const [navigating, startNav] = React.useTransition();
   const go = React.useCallback(
     (patch: Record<string, string | null>) => {
       const next = new URLSearchParams(paramsRef.current.toString());
@@ -149,7 +150,7 @@ export default function ListingMap({
       }
       next.delete("page");
       const qs = next.toString();
-      router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      startNav(() => router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
     },
     [pathname, router],
   );
@@ -534,7 +535,13 @@ export default function ListingMap({
       </div>
 
       <div className={cn("relative flex-1 overflow-hidden rounded-xl border bg-[#f5f7fa]", level === "country" ? "max-sm:aspect-[17/10] max-sm:flex-none sm:min-h-[320px]" : "min-h-[360px] lg:min-h-[320px]")}>
-        {loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
+        {(loading || navigating) && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-brand-light/20 backdrop-blur-[2px]" role="status" aria-live="polite">
+            <span className="flex items-center gap-2 rounded-full border border-brand-light bg-white px-3.5 py-1.5 text-sm font-medium text-brand-ink shadow-md">
+              <Loader2 className="size-4 animate-spin text-brand" /> Loading map…
+            </span>
+          </div>
+        )}
         <div ref={el} className="absolute inset-0" role="img" aria-label="Map of listing counts by region" />
         {points.length > 0 && (
           <div className="pointer-events-none absolute bottom-3 left-3 flex gap-3 rounded-lg bg-white/95 px-2.5 py-1.5 text-xs shadow">
