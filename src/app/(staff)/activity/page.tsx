@@ -16,16 +16,18 @@ const ENTITIES = [
   { value: "deal", label: "Deals" },
   { value: "sales_code", label: "Sales codes" },
 ] as const;
-const ENTITY_LABEL: Record<string, string> = { listing: "Listing", deal: "Deal", sales_code: "Sales code" };
+const ENTITY_LABEL: Record<string, string> = { listing: "Listing", deal: "Deal", sales_code: "Sales code", auth: "Sign-in" };
 const ACTION_STYLE: Record<string, string> = {
   created: "bg-emerald-100 text-emerald-900",
   updated: "bg-sky-100 text-sky-900",
   deleted: "bg-rose-100 text-rose-900",
+  exported: "bg-amber-100 text-amber-900",
+  login_failed: "bg-rose-100 text-rose-900",
 };
 
 /** Where the changed record lives now; deleted records have no page. */
 function hrefFor(entity: string, id: string, action: string) {
-  if (action === "deleted") return null;
+  if (action === "deleted" || action === "exported" || action === "login_failed") return null;
   if (entity === "listing") return `/listings/${id}`;
   if (entity === "deal") return `/deals/${id}/edit`;
   return `/sales-codes?q=${encodeURIComponent(id)}`;
@@ -81,7 +83,7 @@ export default async function ActivityPage({
               <li key={r.id} className="flex flex-col gap-1 px-4 py-3 text-sm sm:flex-row sm:items-center sm:gap-4">
                 <div className="flex shrink-0 items-center gap-2 sm:w-44">
                   <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize", ACTION_STYLE[r.action])}>
-                    {r.action}
+                    {r.action.replace("_", " ")}
                   </span>
                   <span className="text-muted-foreground">{ENTITY_LABEL[r.entity] ?? r.entity}</span>
                 </div>

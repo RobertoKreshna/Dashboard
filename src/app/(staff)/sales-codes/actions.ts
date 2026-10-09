@@ -23,9 +23,9 @@ const schema = z.object({
     .max(20, "Max 20 characters")
     .regex(/^[A-Za-z0-9_-]+$/, "Use letters, numbers, - or _ only")
     .transform((s) => s.toUpperCase()),
-  fullName: z.string().trim().min(1, "Full name is required"),
-  phone: z.string().trim().optional(),
-  email: z.union([z.literal(""), z.string().trim().email("Enter a valid email")]).optional(),
+  fullName: z.string().trim().min(1, "Full name is required").max(100),
+  phone: z.string().trim().max(30).optional(),
+  email: z.union([z.literal(""), z.string().trim().max(254).email("Enter a valid email")]).optional(),
   isActive: z.boolean(),
 });
 

@@ -1,15 +1,15 @@
 // Client-safe helpers for the deals trend chart (no server-only imports).
 
-const DAYS_SHORT = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
-const DAYS_LONG = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAYS_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** 0 = Sunday. Parsed in UTC so the browser's timezone can't shift the day. */
 export const weekday = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay();
 export const isWeekend = (d: string) => weekday(d) % 6 === 0;
 export const dayShort = (d: string) => DAYS_SHORT[weekday(d)];
 
-/** "2026-10-05" -> "Senin, 5 Okt 2026" */
+/** "2026-10-05" -> "Monday, 5 Oct 2026" */
 export function longDate(d: string) {
   return `${DAYS_LONG[weekday(d)]}, ${Number(d.slice(8))} ${MONTHS_SHORT[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
 }

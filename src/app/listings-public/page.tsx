@@ -1,3 +1,4 @@
+import { SavedSearches } from "@/components/listings/saved-searches";
 import { Pagination } from "@/components/common/pagination";
 import { ListingFilterBar } from "@/components/listings/listing-filter-bar";
 import { ListPanel } from "@/components/listings/list-panel";
@@ -99,6 +100,7 @@ export default async function PublicDashboard({
       </section>
 
       <ListingFilterBar compact openOnly priceBounds={priceBounds} locations={locations} salesCodes={codes} />
+      <SavedSearches basePath="/listings-public" />
 
       <MapHoverProvider>
       <section aria-label="Map and listings" className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">

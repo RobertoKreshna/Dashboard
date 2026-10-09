@@ -27,9 +27,11 @@ export function rateLimit(key: string, limit: number, windowMs: number): { ok: b
 /** Best-effort client IP behind a proxy/CDN. */
 export function clientIp(headers: Headers): string {
   return (
-    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    // Platform-set headers first: Vercel sets these itself, so a client can't forge them.
+    headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
     headers.get("x-real-ip") ||
     headers.get("cf-connecting-ip") ||
+    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "unknown"
   );
 }

@@ -5,6 +5,7 @@ import { parseDealFilters, queryDeals } from "@/lib/deal-queries";
 import { dealSourceLabel, dealTypeLabel, propertyTypeLabel } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 import { commissionSplit } from "@/lib/commission";
+import { logActivity } from "@/lib/activity";
 
 /**
  * Spreadsheet apps run cells that start with = + - @ as formulas ("CSV injection"). Buyer names, notes and
@@ -19,6 +20,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const sp = Object.fromEntries(url.searchParams);
   const { rows, totals } = await queryDeals(parseDealFilters(sp), { all: true });
+
+  await logActivity({ actor: user.email, action: "exported", entity: "deal", entityId: "-", summary: `Exported ${totals.count} deals (${url.searchParams.get("format") === "csv" ? "csv" : "xlsx"})` });
 
   const data = rows.map((d) => {
     const split = d.commissionAmount !== null ? commissionSplit(d.commissionAmount, d.listingSalesCode, d.salesCode) : null;
@@ -61,6 +64,7 @@ export async function GET(req: Request) {
     return new Response(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
+        "Cache-Control": "no-store",
         "Content-Disposition": `attachment; filename="vpro-deals-${stamp}.csv"`,
       },
     });
@@ -71,6 +75,7 @@ export async function GET(req: Request) {
   return new Response(new Uint8Array(buf), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Cache-Control": "no-store",
       "Content-Disposition": `attachment; filename="vpro-deals-${stamp}.xlsx"`,
     },
   });

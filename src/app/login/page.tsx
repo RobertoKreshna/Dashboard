@@ -3,7 +3,7 @@ import { Logo } from "@/components/brand/logo";
 import { safeNext } from "@/lib/safe-next";
 import { LoginForm } from "./login-form";
 
-export const metadata = { title: "Staff login · V-PRO" };
+export const metadata = { title: "Staff login · V-PRO", robots: { index: false, follow: false } };
 
 export default async function LoginPage({
   searchParams,

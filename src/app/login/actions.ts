@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { isStaff } from "@/lib/auth";
 import { safeNext } from "@/lib/safe-next";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { logActivity } from "@/lib/activity";
 import { createClient } from "@/lib/supabase/server";
 
 export type LoginState = { error?: string };
@@ -26,7 +27,10 @@ export async function signIn(_prev: LoginState, formData: FormData): Promise<Log
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: "Invalid email or password." };
+  if (error) {
+    await logActivity({ actor: email, action: "login_failed", entity: "auth", entityId: ip, summary: `Failed sign-in for ${email} from ${ip}` });
+    return { error: "Invalid email or password." };
+  }
 
   // A valid account without the staff role (e.g. someone who signed up) gets no access.
   if (!isStaff(data.user)) {
