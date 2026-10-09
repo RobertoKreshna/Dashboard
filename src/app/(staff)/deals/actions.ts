@@ -2,6 +2,7 @@
 
 import { and, eq, ilike, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { invalidateDashboard } from "@/lib/dashboard-cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
@@ -214,5 +215,52 @@ export async function getListingForDeal(id: string) {
 }
 
 function revalidateAll() {
+  invalidateDashboard();
   for (const p of ["/deals", "/listings", "/listings-public", "/"]) revalidatePath(p);
+}
+
+export type DayDeal = {
+  id: string;
+  dealType: "sale" | "rent";
+  address: string;
+  city: string;
+  buyerName: string;
+  finalPrice: number;
+  /** "Cash", the bank name, or "Not recorded"; same labels as the chart's payment lines. */
+  payment: string;
+  /** "CODE · First", same label as the chart's sales lines. */
+  sales: string;
+};
+
+/** Deals closed on one day, for the dashboard chart's click-through panel. */
+export async function getDealsOnDay(day: string): Promise<DayDeal[]> {
+  await requireUser();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
+  const rows = await db
+    .select({
+      id: deals.id,
+      dealType: deals.dealType,
+      address: deals.address,
+      city: deals.city,
+      buyerName: deals.buyerName,
+      finalPrice: deals.finalPrice,
+      paymentType: deals.paymentType,
+      bankName: deals.bankName,
+      salesCode: deals.salesCode,
+      salesName: salesCodes.fullName,
+    })
+    .from(deals)
+    .innerJoin(salesCodes, eq(salesCodes.code, deals.salesCode))
+    .where(eq(deals.dealDate, day))
+    .orderBy(deals.id);
+  return rows.map((r) => ({
+    id: r.id,
+    dealType: r.dealType,
+    address: r.address,
+    city: r.city,
+    buyerName: r.buyerName,
+    finalPrice: r.finalPrice,
+    payment: r.paymentType === "cash" ? "Cash" : r.paymentType === "bank" ? (r.bankName ?? "Bank (unspecified)") : "Not recorded",
+    sales: `${r.salesCode} · ${r.salesName.split(" ")[0]}`,
+  }));
 }

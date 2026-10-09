@@ -275,40 +275,36 @@ export async function getPublicSummary() {
 export async function getMapCounts(f: ListingFilters) {
   const t = source("public");
   const noLoc = { ...f, province: "", city: "", district: "", village: "" };
-  const rows = await db
-    .select({ province: t.province, city: t.city, n: count() })
-    .from(t)
-    .where(buildWhere(t, noLoc))
-    .groupBy(t.province, t.city);
-  const byProvince = new Map<string, number>();
-  for (const r of rows) byProvince.set(r.province, (byProvince.get(r.province) ?? 0) + r.n);
-
-  // Deeper levels only exist once their parent is chosen.
-  const districtCounts = f.city
-    ? (
-        await db
+  // Deeper levels only exist once their parent is chosen. All three queries are independent, so run them together.
+  const [rows, districtRows, villageRows] = await Promise.all([
+    db
+      .select({ province: t.province, city: t.city, n: count() })
+      .from(t)
+      .where(buildWhere(t, noLoc))
+      .groupBy(t.province, t.city),
+    f.city
+      ? db
           .select({ name: t.district, n: count() })
           .from(t)
           .where(buildWhere(t, { ...noLoc, city: f.city, province: f.province }))
           .groupBy(t.district)
-      ).map((r) => ({ name: r.name, value: r.n }))
-    : [];
-  const villageCounts =
+      : [],
     f.city && f.district
-      ? (
-          await db
-            .select({ name: t.village, n: count() })
-            .from(t)
-            .where(buildWhere(t, { ...noLoc, city: f.city, province: f.province, district: f.district }))
-            .groupBy(t.village)
-        ).map((r) => ({ name: r.name, value: r.n }))
-      : [];
+      ? db
+          .select({ name: t.village, n: count() })
+          .from(t)
+          .where(buildWhere(t, { ...noLoc, city: f.city, province: f.province, district: f.district }))
+          .groupBy(t.village)
+      : [],
+  ]);
+  const byProvince = new Map<string, number>();
+  for (const r of rows) byProvince.set(r.province, (byProvince.get(r.province) ?? 0) + r.n);
 
   return {
     provinceCounts: [...byProvince.entries()].map(([name, value]) => ({ name, value })),
     cityCounts: rows.map((r) => ({ name: r.city, value: r.n, province: r.province })),
-    districtCounts,
-    villageCounts,
+    districtCounts: districtRows.map((r) => ({ name: r.name, value: r.n })),
+    villageCounts: villageRows.map((r) => ({ name: r.name, value: r.n })),
   };
 }
 

@@ -19,12 +19,15 @@ export function ListingFilterBar({
   locations,
   salesCodes,
   compact = false,
+  openOnly = false,
   priceBounds,
 }: {
   locations: Loc[];
   salesCodes: Agent[];
   /** Search + main filters on one row; the rest behind a toggle. */
   compact?: boolean;
+  /** Public view: only Available / Reserved can be picked (no Sold, Rented or All statuses). */
+  openOnly?: boolean;
   priceBounds?: PriceBounds;
 }) {
   const router = useRouter();
@@ -102,10 +105,10 @@ export function ListingFilterBar({
   );
   const statusSel = (
     <NativeSelect aria-label="Status" value={status} onChange={(e) => push({ status: e.target.value === "available" ? null : e.target.value })}>
-      {LISTING_STATUSES.map((s) => (
+      {LISTING_STATUSES.filter((s) => !openOnly || s.value === "available" || s.value === "reserved").map((s) => (
         <option key={s.value} value={s.value}>{s.label}</option>
       ))}
-      <option value="all">All statuses</option>
+      {!openOnly && <option value="all">All statuses</option>}
     </NativeSelect>
   );
   const clearBtn = hasFilters && (

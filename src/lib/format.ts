@@ -6,6 +6,16 @@ export function formatIDR(n: number | null | undefined): string {
   return `Rp ${idr.format(Math.round(n))}`;
 }
 
+const idShort = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 });
+
+/** 1.500.000.000 -> "Rp 1,5 M", 12.000.000 -> "Rp 12 jt" */
+export function compactIDR(n: number): string {
+  if (n >= 1e12) return `Rp ${idShort.format(n / 1e12)} T`;
+  if (n >= 1e9) return `Rp ${idShort.format(n / 1e9)} M`;
+  if (n >= 1e6) return `Rp ${idShort.format(n / 1e6)} jt`;
+  return `Rp ${idr.format(Math.round(n))}`;
+}
+
 export function formatNumber(n: number | null | undefined): string {
   if (n === null || n === undefined) return "-";
   return idr.format(n);

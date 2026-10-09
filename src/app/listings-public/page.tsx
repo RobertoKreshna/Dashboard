@@ -26,17 +26,13 @@ function Summary({ s }: { s: Awaited<ReturnType<typeof getPublicSummary>> }) {
   const parts = [
     { label: "Available", value: s.byStatus.available, color: "#4aa8de", detail: sellRent(s.cross.available) },
     { label: "Reserved", value: s.byStatus.reserved, color: "#e8c12e", detail: sellRent(s.cross.reserved) },
-    {
-      label: "Done deal",
-      value: s.byStatus.sold + s.byStatus.rented,
-      color: "#cbd5e1",
-      detail: `${s.byStatus.sold} sold · ${s.byStatus.rented} rented`,
-    },
   ];
+  // Closed deals aren't shown to the public, so the total only counts what can still be viewed.
+  const total = s.byStatus.available + s.byStatus.reserved;
   return (
     <div className="grid gap-5 rounded-xl border bg-card px-5 py-4 shadow-sm sm:grid-cols-[auto_1fr] sm:items-center sm:gap-10">
       <div>
-        <div className="text-3xl font-bold tabular-nums leading-none">{s.total}</div>
+        <div className="text-3xl font-bold tabular-nums leading-none">{total}</div>
         <div className="mt-1.5 text-sm font-medium">Total listings</div>
       </div>
       <div>
@@ -47,7 +43,7 @@ function Summary({ s }: { s: Awaited<ReturnType<typeof getPublicSummary>> }) {
         >
           {parts.map((p) =>
             p.value > 0 ? (
-              <div key={p.label} style={{ width: `${(p.value / Math.max(1, s.total)) * 100}%`, background: p.color }} />
+              <div key={p.label} style={{ width: `${(p.value / Math.max(1, total)) * 100}%`, background: p.color }} />
             ) : null,
           )}
         </div>
@@ -83,6 +79,8 @@ export default async function PublicDashboard({
 }) {
   const sp = await searchParams;
   const filters = parseListingFilters(sp);
+  // Closed deals aren't public, even if someone edits ?status= in the URL.
+  if (filters.status !== "available" && filters.status !== "reserved") filters.status = "available";
   const [summary, counts, points, list, locations, codes, priceBounds] = await Promise.all([
     getPublicSummary(),
     getMapCounts(filters),
@@ -100,7 +98,7 @@ export default async function PublicDashboard({
         <Summary s={summary} />
       </section>
 
-      <ListingFilterBar compact priceBounds={priceBounds} locations={locations} salesCodes={codes} />
+      <ListingFilterBar compact openOnly priceBounds={priceBounds} locations={locations} salesCodes={codes} />
 
       <MapHoverProvider>
       <section aria-label="Map and listings" className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">

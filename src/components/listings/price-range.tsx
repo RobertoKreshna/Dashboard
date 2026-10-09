@@ -2,18 +2,11 @@
 
 import * as React from "react";
 import { MoneyInput } from "@/components/common/money-input";
+import { compactIDR } from "@/lib/format";
+
+export { compactIDR };
 
 const STEPS = 1000;
-const id = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 });
-
-/** 1.500.000.000 -> "Rp 1,5 M", 12.000.000 -> "Rp 12 jt" */
-export function compactIDR(n: number): string {
-  if (n >= 1e12) return `Rp ${id.format(n / 1e12)} T`;
-  if (n >= 1e9) return `Rp ${id.format(n / 1e9)} M`;
-  if (n >= 1e6) return `Rp ${id.format(n / 1e6)} jt`;
-  return `Rp ${new Intl.NumberFormat("id-ID").format(Math.round(n))}`;
-}
-
 const nice = (x: number) => {
   const mag = 10 ** (Math.floor(Math.log10(x)) - 1);
   return Math.round(x / mag) * mag;

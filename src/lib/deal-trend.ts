@@ -1,7 +1,8 @@
 import "server-only";
-import { and, count, gte, lt, max, min, sql } from "drizzle-orm";
+import { and, count, gte, lt, lte, max, min, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { deals, salesCodes } from "@/db/schema";
+import { shiftMonthBack } from "@/lib/trend-helpers";
 
 export type TrendBy = "total" | "payment" | "sales";
 export type Granularity = "day" | "month";
@@ -11,6 +12,12 @@ export type DealTrend = {
   /** One entry per day / month in the period, in order ("2026-10-03" or "2026-10"), including empty ones. */
   buckets: string[];
   series: { name: string; values: number[]; counts: number[]; total: number }[];
+  /** Same days one month earlier (month + total) or same months one year earlier (year + total), aligned by index; null where last month is shorter. */
+  prev?: { buckets: (string | null)[]; values: number[]; counts: number[]; total: number; totalCount: number };
+  /** What `prev` is a year / month earlier than. */
+  prevKind?: "month" | "year";
+  /** Days (month view) or months (year view) that have happened; later buckets are not drawn. */
+  elapsed?: number;
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -59,23 +66,25 @@ export async function getDealTrend(opts: {
         ? sql`${deals.salesCode}`
         : sql`'Total'`;
 
-  const rows = await db
-    .select({
-      bucket: sql<string>`${bucketExpr}`,
-      series: sql<string>`${seriesExpr}`,
-      value: sql<number>`coalesce(sum(${deals.finalPrice}), 0)::float8`,
-      n: count(),
-    })
-    .from(deals)
-    .where(and(gteDate ? gte(deals.dealDate, gteDate) : undefined, ltDate ? lt(deals.dealDate, ltDate) : undefined))
-    .groupBy(sql`1, 2`);
+  // The three queries don't depend on each other, so run them together.
+  const compare = by === "total" && period !== "all";
+  const [rows, salesRows, prev] = await Promise.all([
+    db
+      .select({
+        bucket: sql<string>`${bucketExpr}`,
+        series: sql<string>`${seriesExpr}`,
+        value: sql<number>`coalesce(sum(${deals.finalPrice}), 0)::float8`,
+        n: count(),
+      })
+      .from(deals)
+      .where(and(gteDate ? gte(deals.dealDate, gteDate) : undefined, ltDate ? lt(deals.dealDate, ltDate) : undefined))
+      .groupBy(sql`1, 2`),
+    by === "sales" ? db.select({ code: salesCodes.code, name: salesCodes.fullName }).from(salesCodes) : [],
+    compare ? (period === "month" ? getPrevMonth(buckets) : getPrevYear(year)) : undefined,
+  ]);
 
   const names = new Map<string, string>();
-  if (by === "sales") {
-    for (const s of await db.select({ code: salesCodes.code, name: salesCodes.fullName }).from(salesCodes)) {
-      names.set(s.code, `${s.code} · ${s.name.split(" ")[0]}`);
-    }
-  }
+  for (const s of salesRows) names.set(s.code, `${s.code} · ${s.name.split(" ")[0]}`);
 
   const index = new Map(buckets.map((b, i) => [b, i]));
   const bySeries = new Map<string, { values: number[]; counts: number[]; total: number }>();
@@ -93,5 +102,78 @@ export async function getDealTrend(opts: {
   // Biggest lines first. Every payment type / bank / salesperson gets its own line (nothing is folded away).
   const ranked = [...bySeries.entries()].sort((a, b) => b[1].total - a[1].total);
 
-  return { granularity, buckets, series: ranked.map(([name, s]) => ({ name, ...s })) };
+  const trend: DealTrend = { granularity, buckets, series: ranked.map(([name, s]) => ({ name, ...s })) };
+  if (prev) {
+    const now = new Date();
+    trend.prev = prev;
+    trend.prevKind = period === "month" ? "month" : "year";
+    trend.elapsed =
+      period === "month"
+        ? year === now.getFullYear() && month === now.getMonth() + 1 ? now.getDate() : buckets.length
+        : year === now.getFullYear() ? now.getMonth() + 1 : 12;
+  }
+  return trend;
+}
+
+/** Last year's monthly totals, Jan-Dec, aligned with this year's 12 buckets. */
+async function getPrevYear(year: number) {
+  const py = year - 1;
+  const prevBuckets = Array.from({ length: 12 }, (_, i) => `${py}-${pad(i + 1)}`);
+  const rows = await db
+    .select({
+      bucket: sql<string>`to_char(${deals.dealDate}, 'YYYY-MM')`,
+      value: sql<number>`coalesce(sum(${deals.finalPrice}), 0)::float8`,
+      n: count(),
+    })
+    .from(deals)
+    .where(and(gte(deals.dealDate, `${py}-01-01`), lt(deals.dealDate, `${year}-01-01`)))
+    .groupBy(sql`1`);
+  const values = prevBuckets.map(() => 0);
+  const counts = prevBuckets.map(() => 0);
+  for (const r of rows) {
+    const i = prevBuckets.indexOf(r.bucket);
+    if (i < 0) continue;
+    values[i] += r.value;
+    counts[i] += r.n;
+  }
+  return {
+    buckets: prevBuckets as (string | null)[],
+    values,
+    counts,
+    total: values.reduce((a, b) => a + b, 0),
+    totalCount: counts.reduce((a, b) => a + b, 0),
+  };
+}
+
+/** Last month's daily totals for the same number of days (day 31 of a 31-day month has no match in a 30-day one). */
+async function getPrevMonth(buckets: string[]) {
+  const last = shiftMonthBack(buckets[buckets.length - 1]);
+  const n = Number(last.slice(8));
+  const first = `${last.slice(0, 7)}-01`;
+  const prevBuckets = buckets.map((_, i) => (i < n ? `${last.slice(0, 7)}-${pad(i + 1)}` : null));
+  const rows = await db
+    .select({
+      bucket: sql<string>`to_char(${deals.dealDate}, 'YYYY-MM-DD')`,
+      value: sql<number>`coalesce(sum(${deals.finalPrice}), 0)::float8`,
+      n: count(),
+    })
+    .from(deals)
+    .where(and(gte(deals.dealDate, first), lte(deals.dealDate, last)))
+    .groupBy(sql`1`);
+  const index = new Map(prevBuckets.map((b, i) => [b, i]));
+  const values = buckets.map(() => 0);
+  const counts = buckets.map(() => 0);
+  for (const r of rows) {
+    const i = index.get(r.bucket);
+    if (i === undefined) continue;
+    values[i] += r.value;
+    counts[i] += r.n;
+  }
+  return {
+    buckets: prevBuckets,
+    values,
+    counts,
+    total: values.reduce((a, b) => a + b, 0),
+    totalCount: counts.reduce((a, b) => a + b, 0),
+  };
 }

@@ -7,13 +7,15 @@ Staff work in a login-protected admin area; one page, the **public Listing Dashb
 
 **Public (no login)**
 - Map-and-list property browser: a drill-down map (Indonesia → province → city → district → village) beside the matching listings. Hovering a listing highlights it on the map and the other way round; once a district is chosen, each listing is a marker.
-- Filters: search, sell/rent, property type, status (default *Available*), price range slider, bedrooms, bathrooms, city, district, sales code, sort.
+- Filters: search, sell/rent, property type, status (*Available* by default; only Available and Reserved are offered, closed deals are never listed), price range slider, bedrooms, bathrooms, city, district, sales code, sort.
 - Listing detail page with photo gallery, facilities, agent name and an "Open in Google Maps" link.
 - **Share on WhatsApp** (title, price, area and link) and **Copy link** buttons on each listing. On the staff listing page they share the public link.
 - Never exposes internal notes, agent phone/email, or anything about deals.
 
 **Staff (login required)**
-- **Dashboard** — active listings, deals and deal value this month, a listings map, a **Deals over time** line chart (by day for a month, by month for a year or all time; split by total, payment type incl. each bank, or salesperson) and **Top sales codes** for the chosen period.
+- **Dashboard** — active listings, deals and deal value this month; a listings map (loaded once it scrolls into view); the **Deal trend** chart (by day for a month, by month for a year or all time; split by total, payment type incl. each bank, or salesperson); **Deal distribution** (sale vs rent and every payment type) and **Top sales codes** for the chosen period.
+  - In the *Total* split, Month and Year views compare with last month / last year: a solid blue line against a dashed grey one, an up/down badge, a **Cumulative** / **Daily** (**Monthly** in Year view) switch, and grouped bars with hatched weekends in the daily view. Hovering a day opens a card with both periods and the change.
+  - Daily views show the day name above the date and mark Saturdays and Sundays in blue. Clicking a day opens a panel with that day's deals.
 - **Listings** — create/edit/delete, photo upload with cover + drag-to-reorder, facilities (add your own), cascading Province → City → District → Village dropdowns, map coordinates, status, internal notes. "Mark as Done Deal" button.
 - **Done Deals** — create from a listing (pre-filled, listing status switches to Sold/Rented, back to Available if the deal is deleted) or manually; payment type (Cash / Bank, with ~118 Indonesian banks); commission amount or percentage, split between the agent who listed and the agent who sold (same agent: 60%; two agents: 30% each; the rest is the company's and isn't shown — see `src/lib/commission.ts`); date-range, payment, sales and city filters; totals; **Excel/CSV export**.
 - **Activity** — a log of who created, changed (with the fields that changed) or deleted listings, deals and sales codes, filterable by type. Recorded by the server actions in `src/lib/activity.ts`; only changes made after the log was added appear.
@@ -143,7 +145,7 @@ src/
     listings/           map, filters, forms, photo manager, place pickers
     deals/  dashboard/  sales/  common/  layout/  ui/ (shadcn)
   db/                   Drizzle schema + client
-  lib/                  queries, formatting, commission split, activity log, geo name matching, Supabase clients
+  lib/                  queries, formatting, commission split, activity log, dashboard cache and chart helpers, geo name matching, Supabase clients
   proxy.ts              auth redirect (Next 16 "proxy")
 drizzle/                SQL migrations
 scripts/                migrate, seed, seed-more, build-geo, helpers
@@ -154,6 +156,7 @@ public/geo/             generated boundary tiles
 
 - Brand: text mark **V-PRO**; palette — blue `#4AA8DE`, light blue `#A9D6F0`, yellow `#E8C12E` (accent only), text `#1F2937`. White text on the lighter blue is below the usual contrast guideline, so primary buttons use semi-bold text.
 - `AGENTS.md` / `CLAUDE.md` come from the Next.js template and point at the bundled Next.js docs in `node_modules/next/dist/docs/`.
+- Dashboard queries (map, stats, chart, distribution, top sales) are cached for 60 seconds (`src/lib/dashboard-cache.ts`, built on `unstable_cache`), so switching the chart split doesn't re-run them. Any server action that writes listings, deals or sales codes must call `invalidateDashboard()`. Changes made straight in the database, or by the seed scripts, can take up to a minute to show.
 - Node 20 works but Supabase's client warns that Node 22+ will be required in future.
 
 ## Credits

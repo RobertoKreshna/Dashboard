@@ -2,6 +2,7 @@
 
 import { count, eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { invalidateDashboard } from "@/lib/dashboard-cache";
 import { z } from "zod";
 import { db } from "@/db";
 import { deals, listings, salesCodes } from "@/db/schema";
@@ -76,6 +77,7 @@ export async function saveSalesCode(
     throw e;
   }
   revalidatePath("/sales-codes");
+  invalidateDashboard();
   return { ok: true };
 }
 
@@ -93,6 +95,7 @@ export async function deleteSalesCode(code: string): Promise<{ error?: string }>
   const [gone] = await db.delete(salesCodes).where(eq(salesCodes.code, code)).returning({ name: salesCodes.fullName });
   await logActivity({ actor: user.email, action: "deleted", entity: "sales_code", entityId: code, summary: gone?.name ?? code });
   revalidatePath("/sales-codes");
+  invalidateDashboard();
   return {};
 }
 
@@ -101,4 +104,5 @@ export async function setSalesCodeActive(code: string, isActive: boolean) {
   await db.update(salesCodes).set({ isActive }).where(eq(salesCodes.code, code));
   await logActivity({ actor: user.email, action: "updated", entity: "sales_code", entityId: code, summary: `Set ${isActive ? "active" : "inactive"}` });
   revalidatePath("/sales-codes");
+  invalidateDashboard();
 }

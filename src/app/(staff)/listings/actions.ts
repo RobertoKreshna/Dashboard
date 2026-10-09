@@ -2,6 +2,7 @@
 
 import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { invalidateDashboard } from "@/lib/dashboard-cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
@@ -127,6 +128,7 @@ export async function saveListing(
   revalidatePath("/listings");
   revalidatePath("/listings-public");
   revalidatePath("/");
+  invalidateDashboard();
   redirect(id ? `/listings/${listingId}` : `/listings/${listingId}/edit?created=1`);
 }
 
@@ -144,6 +146,7 @@ export async function deleteListing(id: string): Promise<{ error?: string }> {
   revalidatePath("/listings");
   revalidatePath("/listings-public");
   revalidatePath("/");
+  invalidateDashboard();
   return {};
 }
 
@@ -233,6 +236,7 @@ export async function deletePhoto(listingId: string, photoId: string) {
 }
 
 function revalidateListing(id: string) {
+  invalidateDashboard();
   revalidatePath(`/listings/${id}`);
   revalidatePath(`/listings/${id}/edit`);
   revalidatePath("/listings");
